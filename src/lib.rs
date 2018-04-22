@@ -1,10 +1,13 @@
+extern crate bytecodec;
 extern crate fibers;
 extern crate futures;
-extern crate httparse;
+extern crate httpcodec;
 #[macro_use]
 extern crate trackable;
 
 pub use error::{Error, ErrorKind};
+
+pub mod request;
 
 mod error;
 

@@ -8,6 +8,7 @@ extern crate trackable;
 pub use error::{Error, ErrorKind};
 
 pub mod request;
+pub mod status;
 
 mod error;
 

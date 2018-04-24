@@ -1,95 +1,38 @@
-use httpcodec::{BodyDecode, BodyEncode, Header, HttpVersion, ReasonPhrase, Request, Response,
-                StatusCode};
+use httpcodec::{Header, HttpVersion, Request};
 
-use Error;
-use status::Status;
-
-pub trait HandleRequest: Sized {
-    const METHOD: &'static str;
-    const PATH: &'static str;
-
-    type ReqBody;
-    type ResBody;
-    type ReqBodyDecoder: BodyDecode;
-    type ResBodyEncoder: BodyEncode;
-
-    #[allow(unused_variables)]
-    fn handle_request_head(&self, req: &Req<()>) -> Option<Res<Self::ResBody>> {
-        None
-    }
-
-    fn handle_request(&self, req: Req<Self::ReqBody>) -> Reply<Self>;
-
-    #[allow(unused_variables)]
-    fn handle_decoding_error(&self, error: &Error) -> Option<Res<Self::ResBody>> {
-        None
-    }
-
-    #[allow(unused_variables)]
-    fn enable_async_decoding(&self, req: &Req<()>) -> bool {
-        false
-    }
-
-    #[allow(unused_variables)]
-    fn enable_async_encoding(&self, res: &Res<Self::ResBody>) -> bool {
-        false
-    }
-}
-
-#[derive(Debug)]
-pub struct Reply<T>(T);
-impl<T: HandleRequest> Reply<T> {
-    // pub fn done(response: Response<T::ResBody>)
-}
-
-#[derive(Debug)]
-pub struct Res<T>(Response<T>);
-impl<T> Res<T> {
-    pub fn new(status: Status, body: T) -> Self {
-        let inner = unsafe {
-            Response::new(
-                HttpVersion::V1_1,
-                StatusCode::new_unchecked(status.code()),
-                ReasonPhrase::new_unchecked(status.reason_phrase()),
-                body,
-            )
-        };
-        Res(inner)
-    }
-
-    // pub fn header_mut(&mut self)
-    // pub fn body_mut(&mut self)
-}
-impl<T> From<Response<T>> for Res<T> {
-    fn from(f: Response<T>) -> Self {
-        Res(f)
-    }
-}
-
+/// HTTP request.
 #[derive(Debug)]
 pub struct Req<T>(Request<T>);
 impl<T> Req<T> {
+    /// Returns the method of the request.
     pub fn method(&self) -> &str {
         self.0.method().as_str()
     }
 
+    /// Returns the target path of the request.
+    ///
+    /// Note that the string also contains the query and fragment parts of URL
+    /// in addition to the path part.
     pub fn path(&self) -> &str {
         self.0.request_target().as_str()
     }
 
-    pub fn http_version(&self) -> HttpVersion {
+    /// Returns the HTTP version of the request.
+    pub fn version(&self) -> HttpVersion {
         self.0.http_version()
     }
 
-    // TODO: wrap
+    /// Returns the header of the response.
     pub fn header(&self) -> Header {
         self.0.header()
     }
 
+    /// Returns a reference to the body of the response.
     pub fn body(&self) -> &T {
         self.0.body()
     }
 
+    /// Takes ownership of the request, and returns its body.
     pub fn into_body(self) -> T {
         self.0.into_body()
     }

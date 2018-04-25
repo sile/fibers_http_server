@@ -1,3 +1,4 @@
+use std::fmt;
 use std::marker::PhantomData;
 use factory::{DefaultFactory, Factory};
 use httpcodec::{BodyDecode, BodyEncode};
@@ -106,4 +107,19 @@ where
 pub struct Reply<T>(T);
 impl<T: HandleRequest> Reply<T> {
     // pub fn done(response: Response<T::ResBody>)
+}
+
+pub struct RequestHandler {}
+impl RequestHandler {
+    pub fn new<H, D, E>(handler: H, options: HandlerOptions<H, D, E>) -> Self
+    where
+        H: HandleRequest,
+    {
+        unimplemented!()
+    }
+}
+impl fmt::Debug for RequestHandler {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Requesthandler {{ .. }}")
+    }
 }

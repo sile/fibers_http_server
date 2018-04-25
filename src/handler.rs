@@ -1,5 +1,7 @@
 use std::fmt;
 use std::marker::PhantomData;
+use bytecodec::{self, ByteCount, Decode, Encode, Eos};
+use bytecodec::marker::Never;
 use factory::{DefaultFactory, Factory};
 use httpcodec::{BodyDecode, BodyEncode};
 
@@ -115,6 +117,40 @@ impl RequestHandler {
     where
         H: HandleRequest,
     {
+        unimplemented!()
+    }
+}
+impl Decode for RequestHandler {
+    type Item = ();
+
+    fn decode(&mut self, buf: &[u8], eos: Eos) -> bytecodec::Result<(usize, Option<Self::Item>)> {
+        unimplemented!()
+    }
+
+    fn has_terminated(&self) -> bool {
+        unimplemented!()
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        unimplemented!()
+    }
+}
+impl Encode for RequestHandler {
+    type Item = Never;
+
+    fn encode(&mut self, buf: &mut [u8], eos: Eos) -> bytecodec::Result<usize> {
+        unimplemented!()
+    }
+
+    fn start_encoding(&mut self, item: Self::Item) -> bytecodec::Result<()> {
+        unimplemented!()
+    }
+
+    fn is_idle(&self) -> bool {
+        unimplemented!()
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
         unimplemented!()
     }
 }

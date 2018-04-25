@@ -14,7 +14,7 @@ use dispatcher::{Dispatcher, DispatcherBuilder};
 pub struct ServerBuilder {
     bind_addr: SocketAddr,
     logger: Logger,
-    decode_options: DecodeOptions,
+    decode_options: DecodeOptions, // TODO
     dispatcher: DispatcherBuilder,
 }
 impl ServerBuilder {

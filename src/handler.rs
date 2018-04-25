@@ -108,7 +108,9 @@ where
 #[derive(Debug)]
 pub struct Reply<T>(T);
 impl<T: HandleRequest> Reply<T> {
-    // pub fn done(response: Response<T::ResBody>)
+    pub fn done(response: Res<T::ResBody>) -> Self {
+        unimplemented!()
+    }
 }
 
 pub struct RequestHandler {}

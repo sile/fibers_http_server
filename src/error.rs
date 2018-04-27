@@ -1,4 +1,5 @@
 use std;
+use bytecodec;
 use trackable::error::{Failure, TrackableError};
 use trackable::error::{ErrorKind as TrackableErrorKind, ErrorKindExt};
 
@@ -13,6 +14,15 @@ impl From<Failure> for Error {
 impl From<std::io::Error> for Error {
     fn from(f: std::io::Error) -> Self {
         ErrorKind::Other.cause(f).into()
+    }
+}
+impl From<bytecodec::Error> for Error {
+    fn from(f: bytecodec::Error) -> Self {
+        let kind = match *f.kind() {
+            bytecodec::ErrorKind::InvalidInput => ErrorKind::InvalidInput,
+            _ => ErrorKind::Other,
+        };
+        kind.takes_over(f).into()
     }
 }
 

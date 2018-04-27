@@ -1,20 +1,21 @@
 use std::fmt;
 use std::marker::PhantomData;
-use bytecodec::{self, ByteCount, Decode, Encode, Eos};
-use bytecodec::marker::Never;
+use std::sync::Arc;
+use bytecodec::{Decode, Encode};
+use bytecodec::io::{IoDecodeExt, IoEncodeExt, ReadBuf, WriteBuf};
 use factory::{DefaultFactory, Factory};
 use httpcodec::{BodyDecode, BodyEncode};
 
-use {Error, Req, Res};
+use {Error, Req, Res, Result};
 
-pub trait HandleRequest: Sized {
+pub trait HandleRequest: Sized + Send + Sync + 'static {
     const METHOD: &'static str;
     const PATH: &'static str;
 
-    type ReqBody;
-    type ResBody;
-    type Decoder: BodyDecode<Item = Self::ReqBody>;
-    type Encoder: BodyEncode<Item = Self::ResBody>;
+    type ReqBody: Send + 'static;
+    type ResBody: Send + 'static;
+    type Decoder: BodyDecode<Item = Self::ReqBody> + Send + 'static;
+    type Encoder: BodyEncode<Item = Self::ResBody> + Send + 'static;
 
     #[allow(unused_variables)]
     fn handle_request_head(&self, req: &Req<()>) -> Option<Res<Self::ResBody>> {
@@ -28,6 +29,7 @@ pub trait HandleRequest: Sized {
         None
     }
 
+    // TODO
     #[allow(unused_variables)]
     fn enable_async_decoding(&self, req: &Req<()>) -> bool {
         false
@@ -113,51 +115,89 @@ impl<T: HandleRequest> Reply<T> {
     }
 }
 
-pub struct RequestHandler {}
-impl RequestHandler {
-    pub fn new<H, D, E>(handler: H, options: HandlerOptions<H, D, E>) -> Self
+trait HandleStream {
+    fn init(&mut self, req: Req<()>);
+    fn read(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Action>;
+    fn write(&mut self, buf: &mut WriteBuf<Vec<u8>>) -> Result<Action>;
+}
+
+struct StreamHandler<H, D, E>
+where
+    H: HandleRequest,
+{
+    request_handler: Arc<H>,
+    req_head: Option<Req<()>>,
+    response: Option<Res<H::ResBody>>,
+    decoder: D,
+    encoder: E,
+}
+impl<H, D, E> HandleStream for StreamHandler<H, D, E>
+where
+    H: HandleRequest,
+    D: Decode<Item = H::ReqBody>,
+    E: Encode<Item = H::ResBody>,
+{
+    fn init(&mut self, req: Req<()>) {
+        self.response = self.request_handler.handle_request_head(&req);
+        self.req_head = Some(req);
+    }
+
+    fn read(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Action> {
+        if self.response.is_some() {
+            return Ok(Action::NextPhase);
+        }
+        if let Some(body) = track!(self.decoder.decode_from_read_buf(buf))? {
+            let req = self.req_head
+                .take()
+                .expect("Never fails")
+                .map_body(|()| body);
+            unimplemented!()
+        } else {
+            Ok(Action::Continue)
+        }
+    }
+
+    fn write(&mut self, buf: &mut WriteBuf<Vec<u8>>) -> Result<Action> {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug)]
+pub enum Action {
+    Continue,
+    NextPhase,
+    CloseStream,
+}
+
+pub struct StreamHandlerFactory {
+    inner: Box<Fn() -> Box<HandleStream + Send + 'static> + Send + 'static>,
+}
+impl StreamHandlerFactory {
+    pub fn new<H, D, E>(request_handler: H, options: HandlerOptions<H, D, E>) -> Self
     where
         H: HandleRequest,
+        D: Factory<Item = H::Decoder> + Send + 'static,
+        E: Factory<Item = H::Encoder> + Send + 'static,
     {
-        unimplemented!()
+        let request_handler = Arc::new(request_handler);
+        let f = move || {
+            let request_handler = Arc::clone(&request_handler);
+            let decoder = options.decoder_factory.create();
+            let encoder = options.encoder_factory.create();
+            let stream_handler = StreamHandler {
+                request_handler,
+                response: None,
+                decoder,
+                encoder,
+            };
+            let stream_handler: Box<HandleStream + Send + 'static> = Box::new(stream_handler);
+            stream_handler
+        };
+        StreamHandlerFactory { inner: Box::new(f) }
     }
 }
-impl Decode for RequestHandler {
-    type Item = ();
-
-    fn decode(&mut self, buf: &[u8], eos: Eos) -> bytecodec::Result<(usize, Option<Self::Item>)> {
-        unimplemented!()
-    }
-
-    fn has_terminated(&self) -> bool {
-        unimplemented!()
-    }
-
-    fn requiring_bytes(&self) -> ByteCount {
-        unimplemented!()
-    }
-}
-impl Encode for RequestHandler {
-    type Item = Never;
-
-    fn encode(&mut self, buf: &mut [u8], eos: Eos) -> bytecodec::Result<usize> {
-        unimplemented!()
-    }
-
-    fn start_encoding(&mut self, item: Self::Item) -> bytecodec::Result<()> {
-        unimplemented!()
-    }
-
-    fn is_idle(&self) -> bool {
-        unimplemented!()
-    }
-
-    fn requiring_bytes(&self) -> ByteCount {
-        unimplemented!()
-    }
-}
-impl fmt::Debug for RequestHandler {
+impl fmt::Debug for StreamHandlerFactory {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Requesthandler {{ .. }}")
+        write!(f, "StreamHandlerFactory {{ .. }}")
     }
 }

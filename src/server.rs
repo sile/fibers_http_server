@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use slog::{Discard, Logger};
+use factory::Factory;
 use fibers::{BoxSpawn, Spawn};
 use fibers::net::TcpListener;
 use fibers::net::futures::{Connected, TcpListenerBind};
@@ -41,11 +42,16 @@ impl ServerBuilder {
         self.add_handler_with_options(handler, HandlerOptions::default())
     }
 
-    pub fn add_handler_with_options<H: HandleRequest, D, E>(
+    pub fn add_handler_with_options<H, D, E>(
         &mut self,
         handler: H,
         options: HandlerOptions<H, D, E>,
-    ) -> Result<&mut Self> {
+    ) -> Result<&mut Self>
+    where
+        H: HandleRequest,
+        D: Factory<Item = H::Decoder> + Send + 'static,
+        E: Factory<Item = H::Encoder> + Send + 'static,
+    {
         track!(self.dispatcher.register_handler(handler, options))?;
         Ok(self)
     }

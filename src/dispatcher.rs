@@ -1,7 +1,8 @@
 use std::sync::Arc;
+use factory::Factory;
 
 use {ErrorKind, HandleRequest, HandlerOptions, Result};
-use handler::RequestHandler;
+use handler::StreamHandlerFactory;
 
 type Method = &'static str;
 
@@ -28,10 +29,12 @@ impl DispatcherBuilder {
     ) -> Result<()>
     where
         H: HandleRequest,
+        D: Factory<Item = H::Decoder> + Send + 'static,
+        E: Factory<Item = H::Encoder> + Send + 'static,
     {
         let method = H::METHOD;
         let path = track!(Path::parse(H::PATH))?;
-        let handler = RequestHandler::new(handler, options);
+        let handler = StreamHandlerFactory::new(handler, options);
         track!(self.trie.register(method, path, handler); method, H::PATH)?;
         Ok(())
     }
@@ -46,7 +49,12 @@ impl DispatcherBuilder {
 #[derive(Debug, Default)]
 struct Trie(TrieNode);
 impl Trie {
-    fn register(&mut self, method: Method, path: Path, handler: RequestHandler) -> Result<()> {
+    fn register(
+        &mut self,
+        method: Method,
+        path: Path,
+        handler: StreamHandlerFactory,
+    ) -> Result<()> {
         let mut node = &mut self.0;
         let mut segments = path.0.into_iter().peekable();
         while let Some(segment) = segments.next() {
@@ -107,7 +115,7 @@ impl Trie {
 #[derive(Debug, Default)]
 struct TrieNode {
     segments: Vec<(Segment, Box<TrieNode>)>,
-    handlers: Vec<(Method, RequestHandler)>,
+    handlers: Vec<(Method, StreamHandlerFactory)>,
 }
 impl TrieNode {}
 

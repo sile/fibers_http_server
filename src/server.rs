@@ -1,15 +1,17 @@
 use std::net::SocketAddr;
 use slog::{Discard, Logger};
+use bytecodec::io::{ReadBuf, WriteBuf};
 use factory::Factory;
 use fibers::{BoxSpawn, Spawn};
-use fibers::net::TcpListener;
+use fibers::net::{TcpListener, TcpStream};
 use fibers::net::futures::{Connected, TcpListenerBind};
 use fibers::net::streams::Incoming;
 use futures::{Async, Future, Poll, Stream};
-use httpcodec::DecodeOptions;
+use httpcodec::{DecodeOptions, NoBodyDecoder, RequestDecoder};
 
 use {Error, HandleRequest, HandlerOptions, Result};
 use dispatcher::{Dispatcher, DispatcherBuilder};
+use handler::BoxStreamHandler;
 
 #[derive(Debug)]
 pub struct ServerBuilder {
@@ -49,8 +51,8 @@ impl ServerBuilder {
     ) -> Result<&mut Self>
     where
         H: HandleRequest,
-        D: Factory<Item = H::Decoder> + Send + 'static,
-        E: Factory<Item = H::Encoder> + Send + 'static,
+        D: Factory<Item = H::Decoder> + Send + Sync + 'static,
+        E: Factory<Item = H::Encoder> + Send + Sync + 'static,
     {
         track!(self.dispatcher.register_handler(handler, options))?;
         Ok(self)
@@ -114,9 +116,10 @@ impl Future for Server {
                 Ok(Async::NotReady) => {
                     i += 1;
                 }
-                Ok(Async::Ready(_stream)) => {
+                Ok(Async::Ready(stream)) => {
                     self.connected.swap_remove(i);
-                    unimplemented!()
+                    let future = Connection::new(self, stream);
+                    self.spawner.spawn(future);
                 }
             }
         }
@@ -149,5 +152,35 @@ impl Stream for Listener {
             };
             *self = next;
         }
+    }
+}
+
+#[derive(Debug)]
+struct Connection {
+    stream: TcpStream,
+    rbuf: ReadBuf<Vec<u8>>,
+    wbuf: WriteBuf<Vec<u8>>,
+    head_decoder: RequestDecoder<NoBodyDecoder>,
+    dispatcher: Dispatcher,
+    stream_handler: Option<BoxStreamHandler>,
+}
+impl Connection {
+    fn new(server: &Server, stream: TcpStream) -> Self {
+        Connection {
+            stream,
+            rbuf: ReadBuf::new(vec![0; 4096]), // TODO: parameter
+            wbuf: WriteBuf::new(vec![0; 4096]),
+            head_decoder: Default::default(),
+            dispatcher: server.dispatcher.clone(),
+            stream_handler: None,
+        }
+    }
+}
+impl Future for Connection {
+    type Item = ();
+    type Error = ();
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        unimplemented!()
     }
 }

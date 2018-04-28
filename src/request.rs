@@ -36,4 +36,11 @@ impl<T> Req<T> {
     pub fn into_body(self) -> T {
         self.0.into_body()
     }
+
+    pub(crate) fn map_body<U, F>(self, f: F) -> Req<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        Req(self.0.map_body(f))
+    }
 }

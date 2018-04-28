@@ -3,6 +3,8 @@ extern crate fibers;
 extern crate fibers_http_server;
 extern crate futures;
 extern crate httpcodec;
+#[macro_use]
+extern crate slog;
 extern crate sloggers;
 #[macro_use]
 extern crate trackable;
@@ -19,8 +21,9 @@ fn main() {
     let logger = track_try_unwrap!(TerminalLoggerBuilder::new().build());
     let mut executor = track_try_unwrap!(track_any_err!(ThreadPoolExecutor::new()));
 
-    let mut builder = ServerBuilder::new("0.0.0.0:3000".parse().unwrap());
-    builder.logger(logger);
+    let addr = "0.0.0.0:3000".parse().unwrap();
+    let mut builder = ServerBuilder::new(addr);
+    builder.logger(logger.new(o!("addr" => addr.to_string())));
     track_try_unwrap!(builder.add_handler(Hello));
     let server = builder.finish(executor.handle());
 

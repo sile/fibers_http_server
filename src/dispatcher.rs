@@ -29,8 +29,8 @@ impl DispatcherBuilder {
     ) -> Result<()>
     where
         H: HandleRequest,
-        D: Factory<Item = H::Decoder> + Send + 'static,
-        E: Factory<Item = H::Encoder> + Send + 'static,
+        D: Factory<Item = H::Decoder> + Send + Sync + 'static,
+        E: Factory<Item = H::Encoder> + Send + Sync + 'static,
     {
         let method = H::METHOD;
         let path = track!(Path::parse(H::PATH))?;

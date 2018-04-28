@@ -28,17 +28,6 @@ pub trait HandleRequest: Sized + Send + Sync + 'static {
     fn handle_decoding_error(&self, error: &Error) -> Option<Res<Self::ResBody>> {
         None
     }
-
-    // TODO
-    #[allow(unused_variables)]
-    fn enable_async_decoding(&self, req: &Req<()>) -> bool {
-        false
-    }
-
-    #[allow(unused_variables)]
-    fn enable_async_encoding(&self, res: &Res<Self::ResBody>) -> bool {
-        false
-    }
 }
 
 #[derive(Debug)]
@@ -110,88 +99,126 @@ where
 #[derive(Debug)]
 pub struct Reply<T>(T);
 impl<T: HandleRequest> Reply<T> {
-    pub fn done(response: Res<T::ResBody>) -> Self {
+    pub fn done(res: Res<T::ResBody>) -> Self {
         unimplemented!()
     }
 }
 
 trait HandleStream {
-    fn init(&mut self, req: Req<()>);
-    fn read(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Action>;
-    fn write(&mut self, buf: &mut WriteBuf<Vec<u8>>) -> Result<Action>;
+    fn init(&mut self, req: Req<()>) -> Result<()>;
+    fn recv_request(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Phase>;
+    fn send_response(&mut self, buf: &mut WriteBuf<Vec<u8>>) -> Result<Phase>;
+    fn is_closed(&self) -> bool;
 }
 
-struct StreamHandler<H, D, E>
+struct StreamHandler<H>
 where
     H: HandleRequest,
 {
-    request_handler: Arc<H>,
+    req_handler: Arc<H>,
     req_head: Option<Req<()>>,
-    response: Option<Res<H::ResBody>>,
-    decoder: D,
-    encoder: E,
+    reply: Option<Reply<H>>,
+    decoder: H::Decoder,
+    encoder: H::Encoder,
+    is_closed: bool,
 }
-impl<H, D, E> HandleStream for StreamHandler<H, D, E>
+impl<H> HandleStream for StreamHandler<H>
 where
     H: HandleRequest,
-    D: Decode<Item = H::ReqBody>,
-    E: Encode<Item = H::ResBody>,
 {
-    fn init(&mut self, req: Req<()>) {
-        self.response = self.request_handler.handle_request_head(&req);
-        self.req_head = Some(req);
-    }
-
-    fn read(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Action> {
-        if self.response.is_some() {
-            return Ok(Action::NextPhase);
-        }
-        if let Some(body) = track!(self.decoder.decode_from_read_buf(buf))? {
-            let req = self.req_head
-                .take()
-                .expect("Never fails")
-                .map_body(|()| body);
-            unimplemented!()
+    fn init(&mut self, req: Req<()>) -> Result<()> {
+        if let Some(res) = self.req_handler.handle_request_head(&req) {
+            self.reply = Some(Reply::done(res));
+            self.is_closed = true;
         } else {
-            Ok(Action::Continue)
+            if let Err(e) = self.decoder.initialize(&req.header()) {
+                let e = track!(Error::from(e));
+                if let Some(res) = self.req_handler.handle_decoding_error(&e) {
+                    self.reply = Some(Reply::done(res));
+                    self.is_closed = true;
+                } else {
+                    return Err(e);
+                }
+            } else {
+                self.req_head = Some(req);
+            }
+        }
+        Ok(())
+    }
+
+    fn recv_request(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Phase> {
+        if self.reply.is_some() {
+            return Ok(Phase::Send);
+        }
+        match self.decoder.decode_from_read_buf(buf) {
+            Err(e) => {
+                let e = track!(Error::from(e));
+                if let Some(res) = self.req_handler.handle_decoding_error(&e) {
+                    self.reply = Some(Reply::done(res));
+                    self.is_closed = true;
+                    Ok(Phase::Send)
+                } else {
+                    Err(e)
+                }
+            }
+            Ok(None) => Ok(Phase::Recv),
+            Ok(Some(body)) => {
+                let req = self.req_head
+                    .take()
+                    .expect("Never fails")
+                    .map_body(|()| body);
+                self.reply = Some(self.req_handler.handle_request(req));
+                Ok(Phase::Send)
+            }
         }
     }
 
-    fn write(&mut self, buf: &mut WriteBuf<Vec<u8>>) -> Result<Action> {
+    fn send_response(&mut self, buf: &mut WriteBuf<Vec<u8>>) -> Result<Phase> {
         unimplemented!()
+    }
+
+    fn is_closed(&self) -> bool {
+        self.is_closed
     }
 }
 
 #[derive(Debug)]
-pub enum Action {
-    Continue,
-    NextPhase,
-    CloseStream,
+pub enum Phase {
+    Recv,
+    Send,
+}
+
+pub struct BoxStreamHandler(Box<HandleStream + Send + 'static>);
+impl fmt::Debug for BoxStreamHandler {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "BoxStreamHandler(_)")
+    }
 }
 
 pub struct StreamHandlerFactory {
-    inner: Box<Fn() -> Box<HandleStream + Send + 'static> + Send + 'static>,
+    inner: Box<Fn() -> BoxStreamHandler + Send + Sync + 'static>,
 }
 impl StreamHandlerFactory {
-    pub fn new<H, D, E>(request_handler: H, options: HandlerOptions<H, D, E>) -> Self
+    pub fn new<H, D, E>(req_handler: H, options: HandlerOptions<H, D, E>) -> Self
     where
         H: HandleRequest,
-        D: Factory<Item = H::Decoder> + Send + 'static,
-        E: Factory<Item = H::Encoder> + Send + 'static,
+        D: Factory<Item = H::Decoder> + Send + Sync + 'static,
+        E: Factory<Item = H::Encoder> + Send + Sync + 'static,
     {
-        let request_handler = Arc::new(request_handler);
+        let req_handler = Arc::new(req_handler);
         let f = move || {
-            let request_handler = Arc::clone(&request_handler);
+            let req_handler = Arc::clone(&req_handler);
             let decoder = options.decoder_factory.create();
             let encoder = options.encoder_factory.create();
             let stream_handler = StreamHandler {
-                request_handler,
-                response: None,
+                req_handler,
+                req_head: None,
+                reply: None,
                 decoder,
                 encoder,
+                is_closed: false,
             };
-            let stream_handler: Box<HandleStream + Send + 'static> = Box::new(stream_handler);
-            stream_handler
+            BoxStreamHandler(Box::new(stream_handler))
         };
         StreamHandlerFactory { inner: Box::new(f) }
     }

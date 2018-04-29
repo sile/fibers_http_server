@@ -1,8 +1,9 @@
+use std::result::Result as StdResult;
 use std::sync::Arc;
 use factory::Factory;
 use url::Url;
 
-use {ErrorKind, HandleRequest, HandlerOptions, Req, Result};
+use {ErrorKind, HandleRequest, HandlerOptions, Req, Result, Status};
 use handler::{BoxStreamHandler, StreamHandlerFactory};
 
 type Method = &'static str;
@@ -12,9 +13,8 @@ pub struct Dispatcher {
     trie: Arc<Trie>,
 }
 impl Dispatcher {
-    // TODO: return status code if error
-    pub fn dispatch(&self, req: &Req<()>) -> Option<BoxStreamHandler> {
-        self.trie.find(req.method(), req.url())
+    pub fn dispatch(&self, req: &Req<()>) -> StdResult<BoxStreamHandler, Status> {
+        self.trie.dispatch(req.method(), req.url())
     }
 }
 
@@ -118,9 +118,9 @@ impl Trie {
         Ok(())
     }
 
-    fn find(&self, method: &str, url: &Url) -> Option<BoxStreamHandler> {
+    fn dispatch(&self, method: &str, url: &Url) -> StdResult<BoxStreamHandler, Status> {
         let mut node = &self.0;
-        'root: for actual in url.path_segments()? {
+        'root: for actual in url.path_segments().expect("Never fails") {
             for expected in &node.segments {
                 match *expected {
                     (Segment::Any, ref next) => {
@@ -135,8 +135,7 @@ impl Trie {
                             node = next;
                             break;
                         } else {
-                            // 404
-                            return None;
+                            return Err(Status::NotFound);
                         }
                     }
                 }
@@ -144,10 +143,10 @@ impl Trie {
         }
         for handler in &node.handlers {
             if handler.0 == method {
-                return Some(handler.1.create());
+                return Ok(handler.1.create());
             }
         }
-        None // 405
+        Err(Status::MethodNotAllowed)
     }
 }
 

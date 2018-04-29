@@ -26,6 +26,10 @@ impl<T: Read + Write> BufferedIo<T> {
         &mut self.wbuf
     }
 
+    pub fn write_buf(&self) -> &WriteBuf<Vec<u8>> {
+        &self.wbuf
+    }
+
     pub fn execute_io(&mut self) -> bytecodec::Result<()> {
         track!(self.rbuf.fill(&mut self.stream))?;
         track!(self.wbuf.flush(&mut self.stream))?;

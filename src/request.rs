@@ -53,14 +53,17 @@ impl<T> Req<T> {
     pub(crate) fn new(inner: Request<T>, base_url: &Url) -> Result<Self> {
         track_assert!(
             inner.request_target().as_str().starts_with('/'),
-            ErrorKind::InvalidInput;
+            ErrorKind::InvalidInput,
+            "path={:?}",
             inner.request_target()
         );
         let url = track!(
             Url::options()
                 .base_url(Some(base_url))
                 .parse(inner.request_target().as_str())
-                .map_err(Error::from)
+                .map_err(Error::from),
+            "path={:?}",
+            inner.request_target()
         )?;
         Ok(Req { inner, url })
     }

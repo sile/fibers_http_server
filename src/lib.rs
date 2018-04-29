@@ -25,6 +25,7 @@ mod connection;
 mod dispatcher;
 mod error;
 mod handler;
+mod header;
 mod request;
 mod response;
 mod server;

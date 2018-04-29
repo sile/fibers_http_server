@@ -1,6 +1,11 @@
 use std::fmt;
-use httpcodec::{Header, HeaderMut, HttpVersion, ReasonPhrase, Response, StatusCode};
+use bytecodec::{self, ByteCount, Encode, EncodeExt, Eos};
+use bytecodec::bytes::Utf8Encoder;
+use bytecodec::marker::Never;
+use httpcodec::{BodyEncoder, Header, HeaderMut, HttpVersion, ReasonPhrase, Response,
+                ResponseEncoder, StatusCode};
 
+use header;
 use status::Status;
 
 /// HTTP response.
@@ -60,5 +65,41 @@ impl<T: fmt::Display> fmt::Display for Res<T> {
 impl<T> From<Response<T>> for Res<T> {
     fn from(f: Response<T>) -> Self {
         Res(f)
+    }
+}
+
+pub struct ResEncoder(Box<Encode<Item = Never> + Send + 'static>);
+impl ResEncoder {
+    pub fn error(status: Status) -> Self {
+        let mut res = Res::new(status, status.reason_phrase());
+        res.header_mut().add_field(header::Connection::Close);
+
+        let mut encoder = ResponseEncoder::new(BodyEncoder::new(Utf8Encoder::new()));
+        encoder.start_encoding(res.0).expect("Never fails");
+        ResEncoder(Box::new(encoder.last()))
+    }
+}
+impl fmt::Debug for ResEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ResEncoder(_)")
+    }
+}
+impl Encode for ResEncoder {
+    type Item = Never;
+
+    fn encode(&mut self, buf: &mut [u8], eos: Eos) -> bytecodec::Result<usize> {
+        self.0.encode(buf, eos)
+    }
+
+    fn start_encoding(&mut self, _item: Self::Item) -> bytecodec::Result<()> {
+        unreachable!()
+    }
+
+    fn is_idle(&self) -> bool {
+        self.0.is_idle()
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        self.0.requiring_bytes()
     }
 }

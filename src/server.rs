@@ -1,40 +1,50 @@
 use std::net::SocketAddr;
 use slog::{Discard, Logger};
-use bytecodec::io::{ReadBuf, WriteBuf};
 use factory::Factory;
 use fibers::{BoxSpawn, Spawn};
-use fibers::net::{TcpListener, TcpStream};
+use fibers::net::TcpListener;
 use fibers::net::futures::{Connected, TcpListenerBind};
 use fibers::net::streams::Incoming;
 use futures::{Async, Future, Poll, Stream};
-use httpcodec::{DecodeOptions, NoBodyDecoder, RequestDecoder};
+use httpcodec::DecodeOptions;
+use prometrics::metrics::MetricBuilder;
 
 use {Error, HandleRequest, HandlerOptions, Result};
+use connection::Connection;
 use dispatcher::{Dispatcher, DispatcherBuilder};
-use handler::BoxStreamHandler;
+use metrics::Metrics;
 
+/// HTTP server builder.
 #[derive(Debug)]
 pub struct ServerBuilder {
     bind_addr: SocketAddr,
     logger: Logger,
-    decode_options: DecodeOptions, // TODO
+    metrics: MetricBuilder,
     dispatcher: DispatcherBuilder,
+    options: ServerOptions,
 }
 impl ServerBuilder {
+    /// Makes a new `ServerBuilder` instance.
     pub fn new(bind_addr: SocketAddr) -> Self {
         ServerBuilder {
             bind_addr,
             logger: Logger::root(Discard, o!()),
-            decode_options: DecodeOptions::default(),
+            metrics: MetricBuilder::default(),
             dispatcher: DispatcherBuilder::new(),
+            options: ServerOptions {
+                read_buffer_size: 4096,
+                write_buffer_size: 4096,
+                decode_options: DecodeOptions::default(),
+            },
         }
     }
 
-    pub fn logger(&mut self, logger: Logger) -> &mut Self {
-        self.logger = logger;
-        self
-    }
-
+    /// Adds a HTTP request handler.
+    ///
+    /// # Errors
+    ///
+    /// If the path and method of the handler conflicts with the already registered handlers,
+    /// an `ErrorKind::InvalidInput` error will be returned.
     pub fn add_handler<H>(&mut self, handler: H) -> Result<&mut Self>
     where
         H: HandleRequest,
@@ -44,6 +54,12 @@ impl ServerBuilder {
         self.add_handler_with_options(handler, HandlerOptions::default())
     }
 
+    /// Adds a HTTP request handler with the given options.
+    ///
+    /// # Errors
+    ///
+    /// If the path and method of the handler conflicts with the already registered handlers,
+    /// an `ErrorKind::InvalidInput` error will be returned.
     pub fn add_handler_with_options<H, D, E>(
         &mut self,
         handler: H,
@@ -58,29 +74,84 @@ impl ServerBuilder {
         Ok(self)
     }
 
+    /// Sets the logger of the server.
+    ///
+    /// The default value is `Logger::root(Discard, o!())`.
+    pub fn logger(&mut self, logger: Logger) -> &mut Self {
+        self.logger = logger;
+        self
+    }
+
+    /// Sets `MetricBuilder` used by the server.
+    ///
+    /// The default value is `MetricBuilder::default()`.
+    pub fn metrics(&mut self, metrics: MetricBuilder) -> &mut Self {
+        self.metrics = metrics;
+        self
+    }
+
+    /// Sets the application level read buffer size of the server in bytes.
+    ///
+    /// The default value is `4096`.
+    pub fn read_buffer_size(&mut self, n: usize) -> &mut Self {
+        self.options.read_buffer_size = n;
+        self
+    }
+
+    /// Sets the application level write buffer size of the server in bytes.
+    ///
+    /// The default value is `4096`.
+    pub fn write_buffer_size(&mut self, n: usize) -> &mut Self {
+        self.options.write_buffer_size = n;
+        self
+    }
+
+    /// Sets the options of the request decoder of the server.
+    ///
+    /// The default value is `DecodeOptions::default()`.
+    pub fn decode_options(&mut self, options: DecodeOptions) -> &mut Self {
+        self.options.decode_options = options;
+        self
+    }
+
+    /// Builds a HTTP server with the given settings.
     pub fn finish<S>(self, spawner: S) -> Server
     where
         S: Spawn + Send + 'static,
     {
-        info!(self.logger, "Starts HTTP server");
-        let listener = Listener::Binding(TcpListener::bind(self.bind_addr));
+        let logger = self.logger.new(o!("server" => self.bind_addr.to_string()));
+
+        info!(logger, "Starts HTTP server");
         Server {
-            logger: self.logger,
+            logger,
+            metrics: Metrics::new(self.metrics),
             spawner: spawner.boxed(),
-            listener,
-            connected: Vec::new(),
+            listener: Listener::Binding(TcpListener::bind(self.bind_addr)),
             dispatcher: self.dispatcher.finish(),
+            options: self.options,
+            connected: Vec::new(),
         }
     }
 }
 
+/// HTTP server.
+///
+/// This is created via `ServerBuilder`.
 #[derive(Debug)]
 pub struct Server {
     logger: Logger,
+    metrics: Metrics,
     spawner: BoxSpawn,
     listener: Listener,
     dispatcher: Dispatcher,
+    options: ServerOptions,
     connected: Vec<(SocketAddr, Connected)>,
+}
+impl Server {
+    /// Returns the metrics of the server.
+    pub fn metrics(&self) -> &Metrics {
+        &self.metrics
+    }
 }
 impl Future for Server {
     type Item = ();
@@ -97,7 +168,6 @@ impl Future for Server {
                     return Ok(Async::Ready(()));
                 }
                 Async::Ready(Some((connected, addr))) => {
-                    debug!(self.logger, "New client arrived: {}", addr);
                     self.connected.push((addr, connected));
                 }
             }
@@ -105,22 +175,20 @@ impl Future for Server {
 
         let mut i = 0;
         while i < self.connected.len() {
-            match track!(self.connected[i].1.poll().map_err(Error::from)) {
-                Err(e) => {
-                    warn!(
-                        self.logger,
-                        "Cannot initialize client socket {}: {}", self.connected[i].0, e
-                    );
-                    self.connected.swap_remove(i);
-                }
-                Ok(Async::NotReady) => {
-                    i += 1;
-                }
-                Ok(Async::Ready(stream)) => {
-                    self.connected.swap_remove(i);
-                    let future = Connection::new(self, stream);
-                    self.spawner.spawn(future);
-                }
+            if let Async::Ready(stream) = track!(self.connected[i].1.poll().map_err(Error::from))? {
+                let client_addr = self.connected.swap_remove(i).0;
+                let logger = self.logger.new(o!("client" => client_addr.to_string()));
+                debug!(logger, "New client arrived");
+                let future = track!(Connection::new(
+                    logger,
+                    self.metrics.clone(),
+                    stream,
+                    self.dispatcher.clone(),
+                    &self.options,
+                ))?;
+                self.spawner.spawn(future);
+            } else {
+                i += 1;
             }
         }
         Ok(Async::NotReady)
@@ -156,31 +224,8 @@ impl Stream for Listener {
 }
 
 #[derive(Debug)]
-struct Connection {
-    stream: TcpStream,
-    rbuf: ReadBuf<Vec<u8>>,
-    wbuf: WriteBuf<Vec<u8>>,
-    head_decoder: RequestDecoder<NoBodyDecoder>,
-    dispatcher: Dispatcher,
-    stream_handler: Option<BoxStreamHandler>,
-}
-impl Connection {
-    fn new(server: &Server, stream: TcpStream) -> Self {
-        Connection {
-            stream,
-            rbuf: ReadBuf::new(vec![0; 4096]), // TODO: parameter
-            wbuf: WriteBuf::new(vec![0; 4096]),
-            head_decoder: Default::default(),
-            dispatcher: server.dispatcher.clone(),
-            stream_handler: None,
-        }
-    }
-}
-impl Future for Connection {
-    type Item = ();
-    type Error = ();
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        unimplemented!()
-    }
+pub struct ServerOptions {
+    pub read_buffer_size: usize,
+    pub write_buffer_size: usize,
+    pub decode_options: DecodeOptions,
 }

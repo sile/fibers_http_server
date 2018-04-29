@@ -2,7 +2,9 @@ use std;
 use bytecodec;
 use trackable::error::{Failure, TrackableError};
 use trackable::error::{ErrorKind as TrackableErrorKind, ErrorKindExt};
+use url;
 
+/// This crate specific `Error` type.
 #[derive(Debug, Clone)]
 pub struct Error(TrackableError<ErrorKind>);
 derive_traits_for_trackable_error_newtype!(Error, ErrorKind);
@@ -25,8 +27,15 @@ impl From<bytecodec::Error> for Error {
         kind.takes_over(f).into()
     }
 }
+impl From<url::ParseError> for Error {
+    fn from(f: url::ParseError) -> Self {
+        ErrorKind::InvalidInput.cause(f).into()
+    }
+}
 
-#[derive(Debug, Clone)]
+/// Possible error kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum ErrorKind {
     InvalidInput,
     Other,

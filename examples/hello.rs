@@ -3,7 +3,6 @@ extern crate fibers;
 extern crate fibers_http_server;
 extern crate futures;
 extern crate httpcodec;
-#[macro_use]
 extern crate slog;
 extern crate sloggers;
 #[macro_use]
@@ -16,14 +15,15 @@ use fibers_http_server::{HandleRequest, Reply, Req, Res, ServerBuilder, Status};
 use httpcodec::{BodyDecoder, BodyEncoder};
 use sloggers::Build;
 use sloggers::terminal::TerminalLoggerBuilder;
+use sloggers::types::Severity;
 
 fn main() {
-    let logger = track_try_unwrap!(TerminalLoggerBuilder::new().build());
+    let logger = track_try_unwrap!(TerminalLoggerBuilder::new().level(Severity::Debug).build());
     let mut executor = track_try_unwrap!(track_any_err!(ThreadPoolExecutor::new()));
 
-    let addr = "0.0.0.0:3000".parse().unwrap();
+    let addr = "0.0.0.0:3100".parse().unwrap();
     let mut builder = ServerBuilder::new(addr);
-    builder.logger(logger.new(o!("addr" => addr.to_string())));
+    builder.logger(logger);
     track_try_unwrap!(builder.add_handler(Hello));
     let server = builder.finish(executor.handle());
 

@@ -1,14 +1,21 @@
 use std::sync::Arc;
 use factory::Factory;
+use url::Url;
 
-use {ErrorKind, HandleRequest, HandlerOptions, Result};
-use handler::StreamHandlerFactory;
+use {ErrorKind, HandleRequest, HandlerOptions, Req, Result};
+use handler::{BoxStreamHandler, StreamHandlerFactory};
 
 type Method = &'static str;
 
 #[derive(Debug, Clone)]
 pub struct Dispatcher {
     trie: Arc<Trie>,
+}
+impl Dispatcher {
+    // TODO: return status code if error
+    pub fn dispatch(&self, req: &Req<()>) -> Option<BoxStreamHandler> {
+        self.trie.find(req.method(), req.url())
+    }
 }
 
 #[derive(Debug)]
@@ -110,6 +117,38 @@ impl Trie {
 
         Ok(())
     }
+
+    fn find(&self, method: &str, url: &Url) -> Option<BoxStreamHandler> {
+        let mut node = &self.0;
+        'root: for actual in url.path_segments()? {
+            for expected in &node.segments {
+                match *expected {
+                    (Segment::Any, ref next) => {
+                        node = next;
+                        break;
+                    }
+                    (Segment::AllTheRest, _) => {
+                        break 'root;
+                    }
+                    (Segment::Val(v), ref next) => {
+                        if v == actual {
+                            node = next;
+                            break;
+                        } else {
+                            // 404
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+        for handler in &node.handlers {
+            if handler.0 == method {
+                return Some(handler.1.create());
+            }
+        }
+        None // 405
+    }
 }
 
 #[derive(Debug, Default)]
@@ -127,7 +166,7 @@ impl Path {
         track_assert_eq!(path.chars().nth(0), Some('/'), ErrorKind::InvalidInput; path);
         let mut segments = Vec::new();
         let mut is_last = false;
-        for segment in path.split('/') {
+        for segment in path.split('/').skip(1) {
             track_assert!(
                 !is_last,
                 ErrorKind::InvalidInput,

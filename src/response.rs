@@ -7,7 +7,7 @@ use status::Status;
 ///
 /// `T` is the type of the response body.
 #[derive(Debug)]
-pub struct Res<T>(Response<T>);
+pub struct Res<T>(pub(crate) Response<T>);
 impl<T> Res<T> {
     /// Makes a new `Res` instance.
     pub fn new(status: Status, body: T) -> Self {

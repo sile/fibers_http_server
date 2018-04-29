@@ -10,8 +10,10 @@ fibers = "0.1"
 fibers_tasque = "0.1"
 futures = "0.1"
 httpcodec = "0.1"
-slog = "2"
+prometrics = "0.1"
+slog = {version = "2", features = ["release_max_level_debug"]}
 trackable = "0.2"
+url = "1"
 
 [dev-dependencies]
 sloggers = "0.2"

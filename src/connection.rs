@@ -166,8 +166,8 @@ impl Connection {
             Phase::Closed => Phase::Closed,
         };
         self.phase = next;
-        let new = mem::discriminant(&self.phase);
-        Ok(old != new || !self.stream.would_block())
+        let changed = mem::discriminant(&self.phase) != old;
+        Ok(changed || !self.stream.would_block())
     }
 }
 impl Future for Connection {

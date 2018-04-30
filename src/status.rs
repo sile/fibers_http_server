@@ -1,72 +1,177 @@
 use std::fmt;
 
+/// Response status.
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub enum Status {
-    // 1xxx
+    /// 100
     Continue,
+
+    /// 101
     SwitchingProtocols,
+
+    /// 103
     Processing,
 
-    // 2xx
+    /// 200
     Ok,
+
+    /// 201
     Created,
+
+    /// 202
     Accepted,
+
+    /// 203
     NonAuthoritativeInformation,
+
+    /// 204
     NoContent,
+
+    /// 205
     ResetContent,
+
+    /// 206
     PartialContent,
+
+    /// 207
     MultiStatus,
+
+    /// 208
     AlreadyReported,
+
+    /// 226
     ImUsed,
 
-    // 3xx
+    /// 300
     MultipleChoices,
+
+    /// 301
     MovedPermanently,
+
+    /// 302
     Found,
+
+    /// 303
     SeeOther,
+
+    /// 304
     NotModified,
+
+    /// 305
     UseProxy,
+
+    /// 307
     TemporaryRedirect,
+
+    /// 308
     PermanentRedirect,
 
-    // 4xx
+    /// 400
     BadRequest,
+
+    /// 401
     Unauthorized,
+
+    /// 402
     PaymentRequired,
+
+    /// 403
     Forbidden,
+
+    /// 404
     NotFound,
+
+    /// 405
     MethodNotAllowed,
+
+    /// 406
     NotAcceptable,
+
+    /// 407
     ProxyAuthenticationRequired,
+
+    /// 408
     RequestTimeout,
+
+    /// 409
     Conflict,
+
+    /// 410
     Gone,
+
+    /// 411
     LengthRequired,
+
+    /// 412
     PreconditionFailed,
+
+    /// 413
     PayloadTooLarge,
+
+    /// 414
     UriTooLong,
+
+    /// 415
     UnsupportedMediaType,
+
+    /// 416
     RangeNotSatisfiable,
+
+    /// 417
     ExceptionFailed,
+
+    /// 418
     ImATeapot,
+
+    /// 421
     MisdirectedRequest,
+
+    /// 422
     UnprocessableEntity,
+
+    /// 423
     Locked,
+
+    /// 424
     FailedDependency,
+
+    /// 426
     UpgradeRequired,
+
+    /// 451
     UnavailableForLegalReasons,
 
-    // 5xx
+    /// 500
     InternalServerError,
+
+    /// 501
     NotImplemented,
+
+    /// 502
     BadGateway,
+
+    /// 503
     ServiceUnavailable,
+
+    /// 504
     GatewayTimeout,
+
+    /// 505
     HttpVersionNotSupported,
+
+    /// 506
     VariantAlsoNegotiates,
+
+    /// 507
     InsufficientStorage,
+
+    /// 508
     LoopDetected,
+
+    /// 509
     BandwidthLimitExceeded,
+
+    /// 510
     NotExtended,
 }
 impl fmt::Display for Status {
@@ -75,12 +180,12 @@ impl fmt::Display for Status {
     }
 }
 impl Status {
+    /// Returns the code of the status.
     pub fn code(&self) -> u16 {
         match *self {
             Status::Continue => 100,
             Status::SwitchingProtocols => 101,
             Status::Processing => 102,
-
             Status::Ok => 200,
             Status::Created => 201,
             Status::Accepted => 202,
@@ -91,7 +196,6 @@ impl Status {
             Status::MultiStatus => 207,
             Status::AlreadyReported => 208,
             Status::ImUsed => 226,
-
             Status::MultipleChoices => 300,
             Status::MovedPermanently => 301,
             Status::Found => 302,
@@ -100,7 +204,6 @@ impl Status {
             Status::UseProxy => 305,
             Status::TemporaryRedirect => 307,
             Status::PermanentRedirect => 308,
-
             Status::BadRequest => 400,
             Status::Unauthorized => 401,
             Status::PaymentRequired => 402,
@@ -126,7 +229,6 @@ impl Status {
             Status::FailedDependency => 424,
             Status::UpgradeRequired => 426,
             Status::UnavailableForLegalReasons => 451,
-
             Status::InternalServerError => 500,
             Status::NotImplemented => 501,
             Status::BadGateway => 502,
@@ -140,12 +242,13 @@ impl Status {
             Status::NotExtended => 510,
         }
     }
+
+    /// Returns the typical reason phrase of the status.
     pub fn reason_phrase(&self) -> &'static str {
         match *self {
             Status::Continue => "Continue",
             Status::SwitchingProtocols => "Switching Protocols",
             Status::Processing => "Processing",
-
             Status::Ok => "OK",
             Status::Created => "Created",
             Status::Accepted => "Accepted",
@@ -156,7 +259,6 @@ impl Status {
             Status::MultiStatus => "Multi-Status",
             Status::AlreadyReported => "Already Reported",
             Status::ImUsed => "IM Used",
-
             Status::MultipleChoices => "Multiple Choices",
             Status::MovedPermanently => "Moved Permanently",
             Status::Found => "Found",
@@ -165,7 +267,6 @@ impl Status {
             Status::UseProxy => "Use Proxy",
             Status::TemporaryRedirect => "Temporary Redirect",
             Status::PermanentRedirect => "Permanent Redirect",
-
             Status::BadRequest => "Bad Request",
             Status::Unauthorized => "Unauthorized",
             Status::PaymentRequired => "Payment Required",
@@ -191,7 +292,6 @@ impl Status {
             Status::FailedDependency => "Failed Dependency",
             Status::UpgradeRequired => "Upgrade Required",
             Status::UnavailableForLegalReasons => "Unavailable For Legal Reasons",
-
             Status::InternalServerError => "Internal Server Error",
             Status::NotImplemented => "Not Implemented",
             Status::BadGateway => "Bad Gateway",

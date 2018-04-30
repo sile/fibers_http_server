@@ -1,3 +1,4 @@
+use std::fmt;
 use httpcodec::{Header, HttpVersion, Request};
 use url::Url;
 
@@ -15,6 +16,9 @@ impl<T> Req<T> {
         self.inner.method().as_str()
     }
 
+    /// Returns the URL of the request.
+    ///
+    /// Note that the peer address of the client socket is used as the host and port of the URL.
     pub fn url(&self) -> &Url {
         &self.url
     }
@@ -68,4 +72,8 @@ impl<T> Req<T> {
         Ok(Req { inner, url })
     }
 }
-// TODO: impl Display
+impl<T: fmt::Display> fmt::Display for Req<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}

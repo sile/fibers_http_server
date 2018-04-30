@@ -2,6 +2,16 @@
 name = "fibers_http_server"
 version = "0.1.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
+description = "A tiny HTTP/1.1 server framework"
+homepage = "https://github.com/sile/fibers_http_server"
+repository = "https://github.com/sile/fibers_http_server"
+readme = "README.md"
+keywords = ["http"]
+license = "MIT"
+
+[badges]
+travis-ci = {repository = "sile/fibers_http_server"}
+codecov = {repository = "sile/fibers_http_server"}
 
 [dependencies]
 atomic_immut = "0.1"

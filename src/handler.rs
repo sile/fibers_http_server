@@ -68,6 +68,7 @@ pub struct HandlerOptions<H, D, E> {
     decoder_factory: D,
     encoder_factory: E,
 }
+#[cfg_attr(feature = "cargo-clippy", allow(new_without_default_derive))]
 impl<H> HandlerOptions<H, (), ()> {
     /// Makes a new `HandlerOptions` instance.
     pub fn new() -> Self {
@@ -154,18 +155,16 @@ impl<H: HandleRequest> HandleInput for InputHandler<H> {
         if let Some(res) = self.req_handler.handle_request_head(&req) {
             self.res = Some(res);
             self.is_closed = true;
-        } else {
-            if let Err(e) = self.decoder.initialize(&req.header()) {
-                let e = track!(Error::from(e));
-                if let Some(res) = self.req_handler.handle_decoding_error(&e) {
-                    self.res = Some(res);
-                    self.is_closed = true;
-                } else {
-                    return Err(e);
-                }
+        } else if let Err(e) = self.decoder.initialize(&req.header()) {
+            let e = track!(Error::from(e));
+            if let Some(res) = self.req_handler.handle_decoding_error(&e) {
+                self.res = Some(res);
+                self.is_closed = true;
             } else {
-                self.req_head = Some(req);
+                return Err(e);
             }
+        } else {
+            self.req_head = Some(req);
         }
         Ok(())
     }

@@ -332,7 +332,9 @@ impl HandlerMetrics {
                     new
                 });
             }
-            self.requests.load().get(&status).map(|c| c.increment());
+            if let Some(c) = self.requests.load().get(&status) {
+                c.increment()
+            }
         }
     }
 }

@@ -125,21 +125,21 @@ impl Trie {
                 match *expected {
                     (Segment::Any, ref next) => {
                         node = next;
-                        break;
+                        continue 'root;
                     }
-                    (Segment::AllTheRest, _) => {
+                    (Segment::AllTheRest, ref next) => {
+                        node = next;
                         break 'root;
                     }
                     (Segment::Val(v), ref next) => {
                         if v == actual {
                             node = next;
-                            break;
-                        } else {
-                            return Err(Status::NotFound);
+                            continue 'root;
                         }
                     }
                 }
             }
+            return Err(Status::NotFound);
         }
         for handler in &node.handlers {
             if handler.0 == method {
@@ -155,7 +155,6 @@ struct TrieNode {
     segments: Vec<(Segment, Box<TrieNode>)>,
     handlers: Vec<(Method, StreamHandlerFactory)>,
 }
-impl TrieNode {}
 
 #[derive(Debug)]
 struct Path(Vec<Segment>);
@@ -193,4 +192,69 @@ enum Segment {
     Val(&'static str),
     Any,
     AllTheRest,
+}
+
+#[cfg(test)]
+mod test {
+    use bytecodec::value::NullDecoder;
+    use httpcodec::{BodyDecoder, NoBodyEncoder};
+    use url::Url;
+
+    use {Reply, Req, Res, Status};
+    use super::*;
+
+    macro_rules! define_handler {
+        ($handler:ident, $method:expr, $path:expr) => {
+            struct $handler;
+            impl HandleRequest for $handler {
+                const METHOD: &'static str = $method;
+                const PATH: &'static str = $path;
+
+                type ReqBody = ();
+                type ResBody = ();
+                type Decoder = BodyDecoder<NullDecoder>;
+                type Encoder = NoBodyEncoder;
+
+                fn handle_request(&self, _req: Req<Self::ReqBody>) -> Reply<Self> {
+                    Reply::done(Res::new(Status::Ok, ()))
+                }
+            }
+        }
+    }
+
+    define_handler!(Handler0, "GET", "/");
+    define_handler!(Handler1, "GET", "/foo/bar");
+    define_handler!(Handler2, "PUT", "/foo/bar/");
+    define_handler!(Handler3, "GET", "/aaa/*/bbb");
+    define_handler!(Handler4, "GET", "/111/**");
+
+    fn url(path: &str) -> Url {
+        Url::parse(&format!("http://localhost{}", path)).unwrap()
+    }
+
+    #[test]
+    fn dispatcher_works() {
+        let mut builder = DispatcherBuilder::new();
+        track_try_unwrap!(builder.register_handler(Handler0, Default::default()));
+        track_try_unwrap!(builder.register_handler(Handler1, Default::default()));
+        track_try_unwrap!(builder.register_handler(Handler2, Default::default()));
+        track_try_unwrap!(builder.register_handler(Handler3, Default::default()));
+        track_try_unwrap!(builder.register_handler(Handler4, Default::default()));
+
+        let trie = builder.finish().trie;
+        assert!(trie.dispatch("GET", &url("/")).is_ok());
+        assert!(trie.dispatch("PUT", &url("/")).is_err());
+        assert!(trie.dispatch("GET", &url("/f")).is_err());
+        assert!(trie.dispatch("GET", &url("/foo/bar")).is_ok());
+        assert!(trie.dispatch("GET", &url("/foo/bar/")).is_err());
+        assert!(trie.dispatch("PUT", &url("/foo/bar/")).is_ok());
+        assert!(trie.dispatch("GET", &url("/aaa/0/bbb")).is_ok());
+        assert!(trie.dispatch("GET", &url("/aaa/012/bbb")).is_ok());
+        assert!(trie.dispatch("GET", &url("/aaa/bbb")).is_err());
+        assert!(trie.dispatch("GET", &url("/aaa/0/bbb/")).is_err());
+        assert!(trie.dispatch("GET", &url("/111/")).is_ok());
+        assert!(trie.dispatch("GET", &url("/111/222")).is_ok());
+        assert!(trie.dispatch("GET", &url("/111/222/")).is_ok());
+        assert!(trie.dispatch("GET", &url("/111/222/333")).is_ok());
+    }
 }

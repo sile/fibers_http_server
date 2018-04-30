@@ -1,6 +1,46 @@
 use std::io::{Read, Write};
-use bytecodec::{self, ByteCount, Decode, Eos};
+use bytecodec::{self, ByteCount, Decode, Encode, Eos};
 use bytecodec::io::{ReadBuf, WriteBuf};
+
+#[derive(Debug)]
+pub struct Lazy<E: Encode> {
+    item: Option<E::Item>,
+    inner: E,
+}
+impl<E: Encode> Lazy<E> {
+    pub fn new(inner: E, item: E::Item) -> Self {
+        Lazy {
+            item: Some(item),
+            inner,
+        }
+    }
+}
+impl<E: Encode> Encode for Lazy<E> {
+    type Item = E::Item;
+
+    fn encode(&mut self, buf: &mut [u8], eos: Eos) -> bytecodec::Result<usize> {
+        if let Some(item) = self.item.take() {
+            track!(self.inner.start_encoding(item))?;
+        }
+        self.encode(buf, eos)
+    }
+
+    fn start_encoding(&mut self, _item: Self::Item) -> bytecodec::Result<()> {
+        unimplemented!()
+    }
+
+    fn is_idle(&self) -> bool {
+        self.item.is_none() && self.inner.is_idle()
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        if self.item.is_some() {
+            ByteCount::Unknown
+        } else {
+            self.inner.requiring_bytes()
+        }
+    }
+}
 
 // TODO: move to bytecodec
 #[derive(Debug)]

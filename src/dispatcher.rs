@@ -4,7 +4,7 @@ use factory::Factory;
 use url::Url;
 
 use {ErrorKind, HandleRequest, HandlerOptions, Req, Result, Status};
-use handler::{BoxStreamHandler, StreamHandlerFactory};
+use handler::{RequestHandlerFactory, RequestHandlerInstance};
 
 type Method = &'static str;
 
@@ -13,7 +13,7 @@ pub struct Dispatcher {
     trie: Arc<Trie>,
 }
 impl Dispatcher {
-    pub fn dispatch(&self, req: &Req<()>) -> StdResult<BoxStreamHandler, Status> {
+    pub fn dispatch(&self, req: &Req<()>) -> StdResult<RequestHandlerInstance, Status> {
         self.trie.dispatch(req.method(), req.url())
     }
 }
@@ -41,7 +41,7 @@ impl DispatcherBuilder {
     {
         let method = H::METHOD;
         let path = track!(Path::parse(H::PATH))?;
-        let handler = StreamHandlerFactory::new(handler, options);
+        let handler = RequestHandlerFactory::new(handler, options);
         track!(self.trie.register(method, path, handler); method, H::PATH)?;
         Ok(())
     }
@@ -60,7 +60,7 @@ impl Trie {
         &mut self,
         method: Method,
         path: Path,
-        handler: StreamHandlerFactory,
+        handler: RequestHandlerFactory,
     ) -> Result<()> {
         let mut node = &mut self.0;
         let mut segments = path.0.into_iter().peekable();
@@ -118,7 +118,7 @@ impl Trie {
         Ok(())
     }
 
-    fn dispatch(&self, method: &str, url: &Url) -> StdResult<BoxStreamHandler, Status> {
+    fn dispatch(&self, method: &str, url: &Url) -> StdResult<RequestHandlerInstance, Status> {
         let mut node = &self.0;
         'root: for actual in url.path_segments().expect("Never fails") {
             for expected in &node.segments {
@@ -153,7 +153,7 @@ impl Trie {
 #[derive(Debug, Default)]
 struct TrieNode {
     segments: Vec<(Segment, Box<TrieNode>)>,
-    handlers: Vec<(Method, StreamHandlerFactory)>,
+    handlers: Vec<(Method, RequestHandlerFactory)>,
 }
 
 #[derive(Debug)]

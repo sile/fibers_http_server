@@ -32,6 +32,7 @@ mod server;
 mod status;
 
 // TODO: metrics_handler
+// TODO: handler/with_metrics
 
 /// This crate specific `Result` type.
 pub type Result<T> = std::result::Result<T, Error>;

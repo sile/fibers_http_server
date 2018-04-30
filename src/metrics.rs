@@ -5,7 +5,7 @@ use prometrics::metrics::{Counter, MetricBuilder};
 
 /// HTTP server metrics.
 #[derive(Debug, Clone)]
-pub struct Metrics {
+pub struct ServerMetrics {
     pub(crate) connected_tcp_clients: Counter,
     pub(crate) disconnected_tcp_clients: Counter,
     pub(crate) read_request_head_errors: Counter,
@@ -15,11 +15,11 @@ pub struct Metrics {
     pub(crate) decode_request_body_errors: Counter,
     pub(crate) write_response_errors: Counter,
 }
-impl Metrics {
+impl ServerMetrics {
     pub(crate) fn new(mut builder: MetricBuilder) -> Self {
         // TODO: help
         builder.namespace("fibers_http_server");
-        Metrics {
+        ServerMetrics {
             connected_tcp_clients: builder
                 .counter("connected_tcp_clients_total")
                 .finish()
@@ -61,3 +61,41 @@ impl Metrics {
         }
     }
 }
+
+// #[derive(Debug, Clone)]
+// pub struct HandlersMetrics(pub(crate) HashMap<(&'static str, &'static str), Arc<HandlerMetrics>>);
+// impl HandlersMetrics {
+//     pub(crate) fn new() -> Self {
+//         HandlersMetrics(HashMap::new())
+//     }
+// }
+
+// #[derive(Debug, Clone)]
+// pub struct HandlerMetrics {
+//     requests: HashMap<u16, Counter>,
+//     request_duration_seconds: Histogram,
+//     builder: Arc<Mutex<MetricBuilder>>,
+// }
+// impl HandlerMetrics {
+//     pub(crate) fn new(mut builder: MetricBuilder) -> Self {
+//         builder.namespace("fibers_http_server").subsystem("handler");
+//         HandlerMetrics {
+//             requests: HashMap::new(),
+//             request_duration_seconds: builder
+//                 .histogram("request_duration_seconds")
+//                 .bucket(0.001)
+//                 .bucket(0.005)
+//                 .bucket(0.01)
+//                 .bucket(0.05)
+//                 .bucket(0.1)
+//                 .bucket(0.5)
+//                 .bucket(1.0)
+//                 .bucket(5.0)
+//                 .bucket(10.0)
+//                 .bucket(50.0)
+//                 .finish()
+//                 .expect("Never fails"),
+//             builder: Arc::new(Mutex::new(builder)),
+//         }
+//     }
+// }

@@ -1,38 +1,64 @@
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use bytecodec::Encode;
 use bytecodec::io::{IoDecodeExt, ReadBuf};
 use bytecodec::marker::Never;
 use factory::{DefaultFactory, Factory};
-use futures::{Async, Future, Poll};
+use futures::{self, Future, IntoFuture, Poll};
 use httpcodec::{BodyDecode, BodyEncode, ResponseEncoder};
 
-use {Error, ErrorKind, Req, Res, Result};
+use {Error, Req, Res, Result};
+use bc::Lazy;
 use response::ResEncoder;
 
+/// `HandleRequest` allows for handling HTTP requests.
 pub trait HandleRequest: Sized + Send + Sync + 'static {
+    /// The method that the handler can handle.
     const METHOD: &'static str;
+
+    /// The request path that the handler can handle.
+    ///
+    /// `*` and `**` in the path have the special meanings as follows:
+    /// - `*` matches any path segment (i.e., regarded as a wildcard)
+    /// - `**` matches all remaining parts of a path
     const PATH: &'static str;
 
+    /// The type of the request bodies.
     type ReqBody: Send + 'static;
+
+    /// The type of the response bodies.
     type ResBody: Send + 'static;
+
+    /// Request body decoder.
     type Decoder: BodyDecode<Item = Self::ReqBody> + Send + 'static;
+
+    /// Response body encoder.
     type Encoder: BodyEncode<Item = Self::ResBody> + Send + 'static;
 
+    /// Handles the head part of a request.
+    ///
+    /// If a `Some(..)` value is returned, the invocation of `handle_request` method will be skipped.
+    ///
+    /// The default implementation always returns `None`.
     #[allow(unused_variables)]
     fn handle_request_head(&self, req: &Req<()>) -> Option<Res<Self::ResBody>> {
         None
     }
 
+    /// Handles a request.
     fn handle_request(&self, req: Req<Self::ReqBody>) -> Reply<Self>;
 
+    /// Handles an error occurred while decoding the body of a request.
+    ///
+    /// The default implementation always returns `None`
+    /// (i.e., the default error response will be returned to the HTTP client).
     #[allow(unused_variables)]
     fn handle_decoding_error(&self, error: &Error) -> Option<Res<Self::ResBody>> {
         None
     }
 }
 
+/// Options for a request handler.
 #[derive(Debug)]
 pub struct HandlerOptions<H, D, E> {
     _handler: PhantomData<H>,
@@ -40,6 +66,7 @@ pub struct HandlerOptions<H, D, E> {
     encoder_factory: E,
 }
 impl<H> HandlerOptions<H, (), ()> {
+    /// Makes a new `HandlerOptions` instance.
     pub fn new() -> Self {
         HandlerOptions {
             _handler: PhantomData,
@@ -52,6 +79,7 @@ impl<H, D, E> HandlerOptions<H, D, E>
 where
     H: HandleRequest,
 {
+    /// Specifies the decoder factory that the handler will use.
     pub fn decoder<F>(self, decoder_factory: F) -> HandlerOptions<H, F, E>
     where
         F: Factory<Item = H::Decoder>,
@@ -63,6 +91,7 @@ where
         }
     }
 
+    /// Specifies that the handler will use the default decoder factory.
     pub fn default_decoder(self) -> HandlerOptions<H, DefaultFactory<H::Decoder>, E>
     where
         H::Decoder: Default,
@@ -70,6 +99,7 @@ where
         self.decoder(Default::default())
     }
 
+    /// Specifies the encoder factory that the handler will use.
     pub fn encoder<F>(self, encoder_factory: F) -> HandlerOptions<H, D, F>
     where
         F: Factory<Item = H::Encoder>,
@@ -81,6 +111,7 @@ where
         }
     }
 
+    /// Specifies that the handler will use the default encoder factory.
     pub fn default_encoder(self) -> HandlerOptions<H, D, DefaultFactory<H::Encoder>>
     where
         H::Encoder: Default,
@@ -99,73 +130,15 @@ where
     }
 }
 
-enum ReplyInner<T: HandleRequest> {
-    Done(Res<T::ResBody>),
-}
-impl<T: HandleRequest> fmt::Debug for ReplyInner<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ReplyInner::Done(_) => write!(f, "Done(_)"),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Reply<T: HandleRequest>(ReplyInner<T>);
-impl<T: HandleRequest> Reply<T> {
-    pub fn done(res: Res<T::ResBody>) -> Self {
-        Reply(ReplyInner::Done(res))
-    }
-
-    pub fn boxed(self, encoder: T::Encoder) -> BoxReply {
-        match self.0 {
-            ReplyInner::Done(res) => {
-                let body_encoder = Box::new(encoder);
-                let mut encoder = ResponseEncoder::new(body_encoder);
-                track!(encoder.start_encoding(res.0)).expect("TODO: Use Lazy or ...");
-                BoxReply(BoxReplyInner::Done(Some(ResEncoder::new(encoder))))
-            }
-        }
-    }
-}
-
-enum BoxReplyInner {
-    Done(Option<ResEncoder>),
-}
-impl fmt::Debug for BoxReplyInner {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            BoxReplyInner::Done(_) => write!(f, "Done(_)"),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BoxReply(BoxReplyInner);
-impl Future for BoxReply {
-    type Item = ResEncoder;
-    type Error = Never;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.0 {
-            BoxReplyInner::Done(ref mut x) => {
-                Ok(Async::Ready(x.take().expect("Cannot poll BoxReply twice")))
-            }
-        }
-    }
-}
-
-trait HandleStream {
-    // TODO: rename
+pub trait HandleInput {
     fn init(&mut self, req: Req<()>) -> Result<()>;
-    fn handle_request(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Option<BoxReply>>;
+
+    fn handle_input(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Option<BoxReply>>;
+
     fn is_closed(&self) -> bool;
 }
 
-struct StreamHandler<H>
-where
-    H: HandleRequest,
-{
+struct InputHandler<H: HandleRequest> {
     req_handler: Arc<H>,
     req_head: Option<Req<()>>,
     reply: Option<Reply<H>>,
@@ -173,10 +146,7 @@ where
     encoder: Option<H::Encoder>,
     is_closed: bool,
 }
-impl<H> HandleStream for StreamHandler<H>
-where
-    H: HandleRequest,
-{
+impl<H: HandleRequest> HandleInput for InputHandler<H> {
     fn init(&mut self, req: Req<()>) -> Result<()> {
         if let Some(res) = self.req_handler.handle_request_head(&req) {
             self.reply = Some(Reply::done(res));
@@ -197,9 +167,9 @@ where
         Ok(())
     }
 
-    fn handle_request(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Option<BoxReply>> {
+    fn handle_input(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Option<BoxReply>> {
         if let Some(reply) = self.reply.take() {
-            let encoder = track_assert_some!(self.encoder.take(), ErrorKind::Other);
+            let encoder = self.encoder.take().expect("Never fails");
             return Ok(Some(reply.boxed(encoder)));
         }
 
@@ -209,7 +179,7 @@ where
                 if let Some(res) = self.req_handler.handle_decoding_error(&e) {
                     self.is_closed = true;
                     self.reply = Some(Reply::done(res));
-                    return self.handle_request(buf);
+                    return self.handle_input(buf);
                 } else {
                     Err(e)
                 }
@@ -220,9 +190,8 @@ where
                     .take()
                     .expect("Never fails")
                     .map_body(|()| body);
-                // TODO: check 'connection: close' header
                 self.reply = Some(self.req_handler.handle_request(req));
-                return self.handle_request(buf);
+                return self.handle_input(buf);
             }
         }
     }
@@ -232,28 +201,30 @@ where
     }
 }
 
-pub struct BoxStreamHandler(Box<HandleStream + Send + 'static>);
-impl BoxStreamHandler {
-    pub fn init(&mut self, req: Req<()>) -> Result<()> {
+pub struct RequestHandlerInstance(Box<HandleInput + Send + 'static>);
+impl HandleInput for RequestHandlerInstance {
+    fn init(&mut self, req: Req<()>) -> Result<()> {
         self.0.init(req)
     }
-    pub fn handle_request(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Option<BoxReply>> {
-        self.0.handle_request(buf)
+
+    fn handle_input(&mut self, buf: &mut ReadBuf<Vec<u8>>) -> Result<Option<BoxReply>> {
+        self.0.handle_input(buf)
     }
-    pub fn is_closed(&self) -> bool {
+
+    fn is_closed(&self) -> bool {
         self.0.is_closed()
     }
 }
-impl fmt::Debug for BoxStreamHandler {
+impl fmt::Debug for RequestHandlerInstance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "BoxStreamHandler(_)")
+        write!(f, "RequestHandlerInstance(_)")
     }
 }
 
-pub struct StreamHandlerFactory {
-    inner: Box<Fn() -> BoxStreamHandler + Send + Sync + 'static>,
+pub struct RequestHandlerFactory {
+    inner: Box<Fn() -> RequestHandlerInstance + Send + Sync + 'static>,
 }
-impl StreamHandlerFactory {
+impl RequestHandlerFactory {
     pub fn new<H, D, E>(req_handler: H, options: HandlerOptions<H, D, E>) -> Self
     where
         H: HandleRequest,
@@ -262,28 +233,101 @@ impl StreamHandlerFactory {
     {
         let req_handler = Arc::new(req_handler);
         let f = move || {
-            let req_handler = Arc::clone(&req_handler);
-            let decoder = options.decoder_factory.create();
-            let encoder = options.encoder_factory.create();
-            let stream_handler = StreamHandler {
-                req_handler,
+            let handler = InputHandler {
+                req_handler: Arc::clone(&req_handler),
                 req_head: None,
                 reply: None,
-                decoder,
-                encoder: Some(encoder),
+                decoder: options.decoder_factory.create(),
+                encoder: Some(options.encoder_factory.create()),
                 is_closed: false,
             };
-            BoxStreamHandler(Box::new(stream_handler))
+            RequestHandlerInstance(Box::new(handler))
         };
-        StreamHandlerFactory { inner: Box::new(f) }
+        RequestHandlerFactory { inner: Box::new(f) }
     }
 
-    pub fn create(&self) -> BoxStreamHandler {
+    pub fn create(&self) -> RequestHandlerInstance {
         (self.inner)()
     }
 }
-impl fmt::Debug for StreamHandlerFactory {
+impl fmt::Debug for RequestHandlerFactory {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "StreamHandlerFactory {{ .. }}")
+        write!(f, "RequestHandlerFactory {{ .. }}")
+    }
+}
+
+// /// A reply to a request.
+// pub type Reply<T> = Box<Box<Future<Item = Res<T>, Error = Never> + Send + 'static>>;
+
+// pub fn reply<F, T>(future: F) -> Reply<T>
+// where
+//     F: IntoFuture<Item = Res<T>, Error = Never>,
+// {
+//     Box::new(future.into())
+// }
+
+#[derive(Debug)]
+pub struct Reply<H: HandleRequest>(ReplyInner<H>);
+impl<H: HandleRequest> Reply<H> {
+    /// Makes a `Reply` instance which replies the response immediately.
+    pub fn done(res: Res<H::ResBody>) -> Self {
+        Reply(ReplyInner::Done(res))
+    }
+
+    /// Makes a `Reply` instance which will execute future then reply the resulting item as the response.
+    pub fn future<F>(future: F) -> Self
+    where
+        F: Future<Item = Res<H::ResBody>, Error = Never> + Send + 'static,
+    {
+        Reply(ReplyInner::Future(Box::new(future)))
+    }
+
+    pub(crate) fn boxed(self, encoder: H::Encoder) -> BoxReply {
+        match self.0 {
+            ReplyInner::Done(res) => {
+                let body_encoder = Box::new(encoder);
+                let encoder = Lazy::new(ResponseEncoder::new(body_encoder), res.0);
+                BoxReply(Box::new(futures::finished(ResEncoder::new(encoder))))
+            }
+            ReplyInner::Future(future) => {
+                let future = future.and_then(move |res| {
+                    let body_encoder = Box::new(encoder);
+                    let encoder = Lazy::new(ResponseEncoder::new(body_encoder), res.0);
+                    futures::finished(ResEncoder::new(encoder))
+                });
+                BoxReply(Box::new(future))
+            }
+        }
+    }
+}
+
+enum ReplyInner<H: HandleRequest> {
+    Done(Res<H::ResBody>),
+    Future(Box<Future<Item = Res<H::ResBody>, Error = Never> + Send + 'static>),
+}
+impl<H> fmt::Debug for ReplyInner<H>
+where
+    H: HandleRequest,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ReplyInner::Done(_) => write!(f, "Done(_)"),
+            ReplyInner::Future(_) => write!(f, "Future(_)"),
+        }
+    }
+}
+
+pub struct BoxReply(Box<Future<Item = ResEncoder, Error = Never> + Send + 'static>);
+impl Future for BoxReply {
+    type Item = ResEncoder;
+    type Error = Never;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        self.0.poll()
+    }
+}
+impl fmt::Debug for BoxReply {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "BoxReply(_)")
     }
 }

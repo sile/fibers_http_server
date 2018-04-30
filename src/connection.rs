@@ -10,15 +10,15 @@ use url::Url;
 use {Error, Req, Result, Status};
 use bc::{BufferedIo, MaybeEos};
 use dispatcher::Dispatcher;
-use handler::{BoxReply, BoxStreamHandler};
-use metrics::Metrics;
+use handler::{BoxReply, HandleInput, RequestHandlerInstance};
+use metrics::ServerMetrics;
 use response::ResEncoder;
 use server::ServerOptions;
 
 #[derive(Debug)]
 pub struct Connection {
     logger: Logger,
-    metrics: Metrics,
+    metrics: ServerMetrics,
     stream: BufferedIo<TcpStream>,
     req_head_decoder: MaybeEos<RequestDecoder<NoBodyDecoder>>,
     dispatcher: Dispatcher,
@@ -29,7 +29,7 @@ pub struct Connection {
 impl Connection {
     pub fn new(
         logger: Logger,
-        metrics: Metrics,
+        metrics: ServerMetrics,
         stream: TcpStream,
         dispatcher: Dispatcher,
         options: &ServerOptions,
@@ -111,8 +111,8 @@ impl Connection {
         }
     }
 
-    fn handle_request(&mut self, mut handler: BoxStreamHandler) -> Phase {
-        match track!(handler.handle_request(self.stream.read_buf_mut())) {
+    fn handle_request(&mut self, mut handler: RequestHandlerInstance) -> Phase {
+        match track!(handler.handle_input(self.stream.read_buf_mut())) {
             Err(e) => {
                 warn!(
                     self.logger,
@@ -203,7 +203,7 @@ impl Future for Connection {
 enum Phase {
     ReadRequestHead,
     DispatchRequest(Req<()>),
-    HandleRequest(BoxStreamHandler),
+    HandleRequest(RequestHandlerInstance),
     PollReply(BoxReply),
     WriteResponse(ResEncoder),
     Closed,

@@ -12,7 +12,7 @@ use prometrics::metrics::MetricBuilder;
 use {Error, HandleRequest, HandlerOptions, Result};
 use connection::Connection;
 use dispatcher::{Dispatcher, DispatcherBuilder};
-use metrics::Metrics;
+use metrics::ServerMetrics;
 
 /// HTTP server builder.
 #[derive(Debug)]
@@ -124,7 +124,7 @@ impl ServerBuilder {
         info!(logger, "Starts HTTP server");
         Server {
             logger,
-            metrics: Metrics::new(self.metrics),
+            metrics: ServerMetrics::new(self.metrics),
             spawner: spawner.boxed(),
             listener: Listener::Binding(TcpListener::bind(self.bind_addr)),
             dispatcher: self.dispatcher.finish(),
@@ -140,7 +140,7 @@ impl ServerBuilder {
 #[derive(Debug)]
 pub struct Server {
     logger: Logger,
-    metrics: Metrics,
+    metrics: ServerMetrics,
     spawner: BoxSpawn,
     listener: Listener,
     dispatcher: Dispatcher,
@@ -149,7 +149,7 @@ pub struct Server {
 }
 impl Server {
     /// Returns the metrics of the server.
-    pub fn metrics(&self) -> &Metrics {
+    pub fn metrics(&self) -> &ServerMetrics {
         &self.metrics
     }
 }

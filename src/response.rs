@@ -70,6 +70,13 @@ impl<T> From<Response<T>> for Res<T> {
 
 pub struct ResEncoder(Box<Encode<Item = Never> + Send + 'static>);
 impl ResEncoder {
+    pub fn new<E>(inner: E) -> Self
+    where
+        E: Encode + Send + 'static,
+    {
+        ResEncoder(Box::new(inner.last()))
+    }
+
     pub fn error(status: Status) -> Self {
         let mut res = Res::new(status, status.reason_phrase());
         res.header_mut().add_field(header::Connection::Close);

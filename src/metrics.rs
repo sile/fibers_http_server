@@ -12,6 +12,7 @@ pub struct Metrics {
     pub(crate) parse_request_path_errors: Counter,
     pub(crate) dispatch_request_errors: Counter,
     pub(crate) initialize_handler_errors: Counter,
+    pub(crate) decode_request_body_errors: Counter,
     pub(crate) write_response_errors: Counter,
 }
 impl Metrics {
@@ -45,6 +46,11 @@ impl Metrics {
             initialize_handler_errors: builder
                 .counter("errors_total")
                 .label("phase", "initialize_handler")
+                .finish()
+                .expect("Never fails"),
+            decode_request_body_errors: builder
+                .counter("errors_total")
+                .label("phase", "decode_request_body")
                 .finish()
                 .expect("Never fails"),
             write_response_errors: builder

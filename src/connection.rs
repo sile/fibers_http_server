@@ -8,7 +8,7 @@ use httpcodec::{NoBodyDecoder, RequestDecoder};
 use url::Url;
 
 use {Error, Req, Result, Status};
-use bc::BufferedIo;
+use bc::{BufferedIo, MaybeEos};
 use dispatcher::Dispatcher;
 use handler::{BoxReply, BoxStreamHandler};
 use metrics::Metrics;
@@ -20,10 +20,11 @@ pub struct Connection {
     logger: Logger,
     metrics: Metrics,
     stream: BufferedIo<TcpStream>,
-    req_head_decoder: RequestDecoder<NoBodyDecoder>,
+    req_head_decoder: MaybeEos<RequestDecoder<NoBodyDecoder>>,
     dispatcher: Dispatcher,
     base_url: Url,
     phase: Phase,
+    do_close: bool,
 }
 impl Connection {
     pub fn new(
@@ -40,8 +41,10 @@ impl Connection {
         let base_url = track!(Url::parse(&base_url).map_err(Error::from))?;
 
         metrics.connected_tcp_clients.increment();
-        let req_head_decoder =
-            RequestDecoder::with_options(NoBodyDecoder, options.decode_options.clone());
+        let req_head_decoder = MaybeEos::new(RequestDecoder::with_options(
+            NoBodyDecoder,
+            options.decode_options.clone(),
+        ));
         Ok(Connection {
             logger,
             metrics,
@@ -50,6 +53,7 @@ impl Connection {
             dispatcher,
             base_url,
             phase: Phase::ReadRequestHead,
+            do_close: false,
         })
     }
 
@@ -69,8 +73,8 @@ impl Connection {
                     "Cannot decode the head part of a HTTP request: {}", e
                 );
                 self.metrics.read_request_head_errors.increment();
-                let res = ResEncoder::error(Status::BadRequest);
-                Phase::WriteResponse(res, true)
+                self.do_close = true;
+                Phase::WriteResponse(ResEncoder::error(Status::BadRequest))
             }
             Ok(None) => Phase::ReadRequestHead,
             Ok(Some(head)) => match track!(Req::new(head, &self.base_url)) {
@@ -80,8 +84,8 @@ impl Connection {
                         "Cannot parse the path of a HTTP request: {}", e
                     );
                     self.metrics.parse_request_path_errors.increment();
-                    let res = ResEncoder::error(Status::BadRequest);
-                    Phase::WriteResponse(res, true)
+                    self.do_close = true;
+                    Phase::WriteResponse(ResEncoder::error(Status::BadRequest))
                 }
                 Ok(head) => Phase::DispatchRequest(head),
             },
@@ -92,79 +96,78 @@ impl Connection {
         match self.dispatcher.dispatch(&head) {
             Err(status) => {
                 self.metrics.dispatch_request_errors.increment();
-                let res = ResEncoder::error(status);
-                Phase::WriteResponse(res, true)
+                self.do_close = true;
+                Phase::WriteResponse(ResEncoder::error(status))
             }
             Ok(mut handler) => match track!(handler.init(head)) {
                 Err(e) => {
                     warn!(self.logger, "Cannot initialize a request handler: {}", e);
                     self.metrics.initialize_handler_errors.increment();
-                    let res = ResEncoder::error(Status::InternalServerError);
-                    Phase::WriteResponse(res, true)
+                    self.do_close = true;
+                    Phase::WriteResponse(ResEncoder::error(Status::InternalServerError))
                 }
                 Ok(()) => Phase::HandleRequest(handler),
             },
         }
     }
 
-    fn handle_request(&mut self, handler: BoxStreamHandler) -> Phase {
-        // if let Some(mut handler) = self.stream_handler.take() {
-        //     if let Some(reply) = handler
-        //         .handle_request(self.stream.read_buf_mut())
-        //         .expect("TODO: 9")
-        //     {
-        //         self.is_closed = handler.is_closed();
-        //         self.reply = Some(reply);
-        //         continue;
-        //     } else {
-        //         self.stream_handler = Some(handler);
-        //     }
-        // } else if self.res_encoder.is_none() {
-        // }
-        unimplemented!()
+    fn handle_request(&mut self, mut handler: BoxStreamHandler) -> Phase {
+        match track!(handler.handle_request(self.stream.read_buf_mut())) {
+            Err(e) => {
+                warn!(
+                    self.logger,
+                    "Cannot decode the body of a HTTP request: {}", e
+                );
+                self.metrics.decode_request_body_errors.increment();
+                self.do_close = true;
+                Phase::WriteResponse(ResEncoder::error(Status::BadRequest))
+            }
+            Ok(None) => Phase::HandleRequest(handler),
+            Ok(Some(reply)) => {
+                self.do_close = handler.is_closed();
+                Phase::PollReply(reply)
+            }
+        }
     }
 
-    fn poll_reply(&mut self, reply: BoxReply) -> Phase {
-        // if let Some(mut reply) = self.reply.take() {
-        //     if let Async::Ready(res_encoder) = reply.poll().expect("TODO: 8") {
-        //         self.res_encoder = Some(res_encoder);
-        //     } else {
-        //         self.reply = Some(reply);
-        //         return Ok(Async::NotReady);
-        //     }
-        // }
-        unimplemented!()
+    fn poll_reply(&mut self, mut reply: BoxReply) -> Phase {
+        if let Async::Ready(res_encoder) = reply.poll().expect("Never fails") {
+            Phase::WriteResponse(res_encoder)
+        } else {
+            Phase::PollReply(reply)
+        }
     }
 
-    fn write_response(&mut self, mut encoder: ResEncoder, last: bool) -> Result<(bool, Phase)> {
+    fn write_response(&mut self, mut encoder: ResEncoder) -> Result<Phase> {
         track!(encoder.encode_to_write_buf(self.stream.write_buf_mut())).map_err(|e| {
             self.metrics.write_response_errors.increment();
             e
         })?;
         if encoder.is_idle() {
-            if last {
-                Ok((true, Phase::Closed))
+            if self.do_close {
+                Ok(Phase::Closed)
             } else {
-                Ok((true, Phase::ReadRequestHead))
+                Ok(Phase::ReadRequestHead)
             }
         } else {
-            let suspended = !self.stream.write_buf().is_full();
-            Ok((!suspended, Phase::WriteResponse(encoder, last)))
+            Ok(Phase::WriteResponse(encoder))
         }
     }
 
     fn poll_once(&mut self) -> Result<bool> {
         track!(self.stream.execute_io())?;
-        let (do_continue, next) = match self.phase.take() {
-            Phase::ReadRequestHead => (true, self.read_request_head()),
-            Phase::DispatchRequest(req) => (true, self.dispatch_request(req)),
-            Phase::HandleRequest(handler) => (true, self.handle_request(handler)),
-            Phase::PollReply(reply) => (true, self.poll_reply(reply)),
-            Phase::WriteResponse(res, last) => track!(self.write_response(res, last))?,
-            Phase::Closed => (true, Phase::Closed),
+        let old = mem::discriminant(&self.phase);
+        let next = match self.phase.take() {
+            Phase::ReadRequestHead => self.read_request_head(),
+            Phase::DispatchRequest(req) => self.dispatch_request(req),
+            Phase::HandleRequest(handler) => self.handle_request(handler),
+            Phase::PollReply(reply) => self.poll_reply(reply),
+            Phase::WriteResponse(res) => track!(self.write_response(res))?,
+            Phase::Closed => Phase::Closed,
         };
         self.phase = next;
-        Ok(do_continue && !self.stream.would_block())
+        let new = mem::discriminant(&self.phase);
+        Ok(old != new || !self.stream.would_block())
     }
 }
 impl Future for Connection {
@@ -181,6 +184,9 @@ impl Future for Connection {
                 }
                 Ok(do_continue) => {
                     if !do_continue {
+                        if self.is_closed() {
+                            break;
+                        }
                         return Ok(Async::NotReady);
                     }
                 }
@@ -199,7 +205,7 @@ enum Phase {
     DispatchRequest(Req<()>),
     HandleRequest(BoxStreamHandler),
     PollReply(BoxReply),
-    WriteResponse(ResEncoder, bool),
+    WriteResponse(ResEncoder),
     Closed,
 }
 impl Phase {

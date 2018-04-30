@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use bytecodec;
+use bytecodec::{self, ByteCount, Decode, Eos};
 use bytecodec::io::{ReadBuf, WriteBuf};
 
 // TODO: move to bytecodec
@@ -17,6 +17,10 @@ impl<T: Read + Write> BufferedIo<T> {
             wbuf: WriteBuf::new(vec![0; write_buf_size]),
         }
     }
+
+    // pub fn read_buf(&self) -> &ReadBuf<Vec<u8>> {
+    //     &self.rbuf
+    // }
 
     pub fn read_buf_mut(&mut self) -> &mut ReadBuf<Vec<u8>> {
         &mut self.rbuf
@@ -46,4 +50,47 @@ impl<T: Read + Write> BufferedIo<T> {
     }
 
     // TODO: stream_ref(), stream_mut(), into_stream()
+}
+
+#[derive(Debug)]
+pub struct MaybeEos<D> {
+    inner: D,
+    started: bool,
+}
+impl<D> MaybeEos<D> {
+    pub fn new(inner: D) -> Self {
+        MaybeEos {
+            inner,
+            started: false,
+        }
+    }
+}
+impl<D: Decode> Decode for MaybeEos<D> {
+    type Item = D::Item;
+
+    fn decode(
+        &mut self,
+        buf: &[u8],
+        mut eos: Eos,
+    ) -> bytecodec::Result<(usize, Option<Self::Item>)> {
+        if !self.started && eos.is_reached() {
+            eos = Eos::new(false);
+        }
+        let (size, item) = track!(self.inner.decode(buf, eos))?;
+        if let Some(item) = item {
+            self.started = false;
+            Ok((size, Some(item)))
+        } else {
+            self.started |= size > 0;
+            Ok((size, None))
+        }
+    }
+
+    fn has_terminated(&self) -> bool {
+        self.inner.has_terminated()
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        self.inner.requiring_bytes()
+    }
 }

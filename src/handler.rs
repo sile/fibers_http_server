@@ -1,7 +1,7 @@
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use bytecodec::{Encode, EncodeExt};
+use bytecodec::Encode;
 use bytecodec::io::{IoDecodeExt, ReadBuf};
 use bytecodec::marker::Never;
 use factory::{DefaultFactory, Factory};
@@ -9,6 +9,7 @@ use futures::{Async, Future, Poll};
 use httpcodec::{BodyDecode, BodyEncode, ResponseEncoder};
 
 use {Error, ErrorKind, Req, Res, Result};
+use response::ResEncoder;
 
 pub trait HandleRequest: Sized + Send + Sync + 'static {
     const METHOD: &'static str;
@@ -117,20 +118,19 @@ impl<T: HandleRequest> Reply<T> {
     }
 
     pub fn boxed(self, encoder: T::Encoder) -> BoxReply {
-        // TODO: handle HEAD request
         match self.0 {
             ReplyInner::Done(res) => {
                 let body_encoder = Box::new(encoder);
                 let mut encoder = ResponseEncoder::new(body_encoder);
                 track!(encoder.start_encoding(res.0)).expect("TODO: Use Lazy or ...");
-                BoxReply(BoxReplyInner::Done(Some(Box::new(encoder.last()))))
+                BoxReply(BoxReplyInner::Done(Some(ResEncoder::new(encoder))))
             }
         }
     }
 }
 
 enum BoxReplyInner {
-    Done(Option<Box<Encode<Item = Never> + Send + 'static>>),
+    Done(Option<ResEncoder>),
 }
 impl fmt::Debug for BoxReplyInner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -143,8 +143,8 @@ impl fmt::Debug for BoxReplyInner {
 #[derive(Debug)]
 pub struct BoxReply(BoxReplyInner);
 impl Future for BoxReply {
-    type Item = Box<Encode<Item = Never> + Send + 'static>;
-    type Error = Error;
+    type Item = ResEncoder;
+    type Error = Never;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match self.0 {

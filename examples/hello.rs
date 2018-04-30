@@ -12,7 +12,7 @@ use bytecodec::bytes::Utf8Encoder;
 use bytecodec::value::NullDecoder;
 use fibers::{Executor, Spawn, ThreadPoolExecutor};
 use fibers_http_server::{HandleRequest, Reply, Req, Res, ServerBuilder, Status};
-use fibers_http_server::metrics::MetricsHandler;
+use fibers_http_server::metrics::{MetricsHandler, WithMetrics};
 use futures::future::ok;
 use httpcodec::{BodyDecoder, BodyEncoder};
 use sloggers::Build;
@@ -26,7 +26,7 @@ fn main() {
     let addr = "0.0.0.0:3100".parse().unwrap();
     let mut builder = ServerBuilder::new(addr);
     builder.logger(logger);
-    track_try_unwrap!(builder.add_handler(Hello));
+    track_try_unwrap!(builder.add_handler(WithMetrics::new(Hello)));
     track_try_unwrap!(builder.add_handler(MetricsHandler));
     let server = builder.finish(executor.handle());
 

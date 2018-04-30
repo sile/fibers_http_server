@@ -66,6 +66,7 @@
 //! # }
 //! ```
 #![warn(missing_docs)]
+extern crate atomic_immut;
 extern crate bytecodec;
 extern crate factory;
 extern crate fibers;

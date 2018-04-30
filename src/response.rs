@@ -72,9 +72,9 @@ pub struct ResEncoder(Box<Encode<Item = Never> + Send + 'static>);
 impl ResEncoder {
     pub fn new<E>(inner: E) -> Self
     where
-        E: Encode + Send + 'static,
+        E: Encode<Item = Never> + Send + 'static,
     {
-        ResEncoder(Box::new(inner.last()))
+        ResEncoder(Box::new(inner))
     }
 
     pub fn error(status: Status) -> Self {

@@ -1,6 +1,7 @@
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use bytecodec::EncodeExt;
 use bytecodec::io::{IoDecodeExt, ReadBuf};
 use bytecodec::marker::Never;
 use factory::{DefaultFactory, Factory};
@@ -8,7 +9,6 @@ use futures::{self, Future, Poll};
 use httpcodec::{BodyDecode, BodyEncode, ResponseEncoder};
 
 use {Error, Req, Res, Result};
-use bc::Lazy;
 use response::ResEncoder;
 
 /// `HandleRequest` allows for handling HTTP requests.
@@ -272,7 +272,7 @@ impl BoxReply {
     {
         let future = reply.and_then(move |res| {
             let body_encoder = Box::new(encoder);
-            let encoder = Lazy::new(ResponseEncoder::new(body_encoder), res.0);
+            let encoder = ResponseEncoder::new(body_encoder).last_item(res.0);
             futures::finished(ResEncoder::new(encoder))
         });
         BoxReply(Box::new(future))

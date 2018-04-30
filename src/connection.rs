@@ -1,14 +1,14 @@
 use std::mem;
 use slog::Logger;
 use bytecodec::Encode;
-use bytecodec::io::{IoDecodeExt, IoEncodeExt};
+use bytecodec::combinator::MaybeEos;
+use bytecodec::io::{BufferedIo, IoDecodeExt, IoEncodeExt};
 use fibers::net::TcpStream;
 use futures::{Async, Future, Poll};
 use httpcodec::{NoBodyDecoder, RequestDecoder};
 use url::Url;
 
 use {Error, Req, Result, Status};
-use bc::{BufferedIo, MaybeEos};
 use dispatcher::Dispatcher;
 use handler::{BoxReply, HandleInput, RequestHandlerInstance};
 use metrics::ServerMetrics;
@@ -58,7 +58,7 @@ impl Connection {
     }
 
     fn is_closed(&self) -> bool {
-        self.stream.is_eos() || (self.stream.write_buf().is_empty() && self.phase.is_closed())
+        self.stream.is_eos() || (self.stream.write_buf_ref().is_empty() && self.phase.is_closed())
     }
 
     fn read_request_head(&mut self) -> Phase {

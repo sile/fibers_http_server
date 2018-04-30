@@ -19,7 +19,6 @@ pub use status::Status;
 
 pub mod metrics;
 
-mod bc; // TODO: delete
 mod connection;
 mod dispatcher;
 mod error;

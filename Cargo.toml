@@ -7,7 +7,6 @@ authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 bytecodec = "0.2"
 factory = "0.1"
 fibers = "0.1"
-fibers_tasque = "0.1"
 futures = "0.1"
 httpcodec = "0.1"
 prometrics = "0.1"

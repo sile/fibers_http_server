@@ -1,7 +1,6 @@
 extern crate bytecodec;
 extern crate factory;
 extern crate fibers;
-extern crate fibers_tasque;
 extern crate futures;
 extern crate httpcodec;
 extern crate prometrics;

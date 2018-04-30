@@ -12,6 +12,7 @@ use bytecodec::bytes::Utf8Encoder;
 use bytecodec::value::NullDecoder;
 use fibers::{Executor, Spawn, ThreadPoolExecutor};
 use fibers_http_server::{HandleRequest, Reply, Req, Res, ServerBuilder, Status};
+use futures::future::ok;
 use httpcodec::{BodyDecoder, BodyEncoder};
 use sloggers::Build;
 use sloggers::terminal::TerminalLoggerBuilder;
@@ -41,8 +42,9 @@ impl HandleRequest for Hello {
     type ResBody = String;
     type Decoder = BodyDecoder<NullDecoder>;
     type Encoder = BodyEncoder<Utf8Encoder>;
+    type Reply = Reply<Self::ResBody>;
 
-    fn handle_request(&self, _req: Req<Self::ReqBody>) -> Reply<Self> {
-        Reply::done(Res::new(Status::Ok, "hello".to_owned()))
+    fn handle_request(&self, _req: Req<Self::ReqBody>) -> Self::Reply {
+        Box::new(ok(Res::new(Status::Ok, "hello".to_owned())))
     }
 }

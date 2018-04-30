@@ -197,6 +197,7 @@ enum Segment {
 #[cfg(test)]
 mod test {
     use bytecodec::value::NullDecoder;
+    use futures::future::ok;
     use httpcodec::{BodyDecoder, NoBodyEncoder};
     use url::Url;
 
@@ -214,9 +215,10 @@ mod test {
                 type ResBody = ();
                 type Decoder = BodyDecoder<NullDecoder>;
                 type Encoder = NoBodyEncoder;
+                type Reply = Reply<Self::ResBody>;
 
-                fn handle_request(&self, _req: Req<Self::ReqBody>) -> Reply<Self> {
-                    Reply::done(Res::new(Status::Ok, ()))
+                fn handle_request(&self, _req: Req<Self::ReqBody>) -> Self::Reply {
+                    Box::new(ok(Res::new(Status::Ok, ())))
                 }
             }
         }

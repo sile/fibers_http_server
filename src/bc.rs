@@ -22,7 +22,7 @@ impl<E: Encode> Encode for Lazy<E> {
         if let Some(item) = self.item.take() {
             track!(self.inner.start_encoding(item))?;
         }
-        self.encode(buf, eos)
+        self.inner.encode(buf, eos)
     }
 
     fn start_encoding(&mut self, _item: Self::Item) -> bytecodec::Result<()> {

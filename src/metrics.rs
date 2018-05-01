@@ -212,8 +212,8 @@ impl<H: HandleRequest> HandleRequest for WithMetrics<H> {
         result
     }
 
-    fn handle_decoding_error(&self, error: &Error) -> Option<Res<Self::ResBody>> {
-        let result = self.inner.handle_decoding_error(error);
+    fn handle_decoding_error(&self, req: Req<()>, error: &Error) -> Option<Res<Self::ResBody>> {
+        let result = self.inner.handle_decoding_error(req, error);
         if let Some(ref res) = result {
             self.metrics.increment_status(res.status_code());
         }

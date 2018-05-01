@@ -56,7 +56,7 @@ pub trait HandleRequest: Sized + Send + Sync + 'static {
     /// The default implementation always returns `None`
     /// (i.e., the default error response will be returned to the HTTP client).
     #[allow(unused_variables)]
-    fn handle_decoding_error(&self, error: &Error) -> Option<Res<Self::ResBody>> {
+    fn handle_decoding_error(&self, req: Req<()>, error: &Error) -> Option<Res<Self::ResBody>> {
         None
     }
 }
@@ -157,7 +157,7 @@ impl<H: HandleRequest> HandleInput for InputHandler<H> {
             self.is_closed = true;
         } else if let Err(e) = self.decoder.initialize(&req.header()) {
             let e = track!(Error::from(e));
-            if let Some(res) = self.req_handler.handle_decoding_error(&e) {
+            if let Some(res) = self.req_handler.handle_decoding_error(req, &e) {
                 self.res = Some(res);
                 self.is_closed = true;
             } else {
@@ -178,7 +178,8 @@ impl<H: HandleRequest> HandleInput for InputHandler<H> {
         match self.decoder.decode_from_read_buf(buf) {
             Err(e) => {
                 let e = track!(Error::from(e));
-                if let Some(res) = self.req_handler.handle_decoding_error(&e) {
+                let req = self.req_head.take().expect("Never fails");
+                if let Some(res) = self.req_handler.handle_decoding_error(req, &e) {
                     self.is_closed = true;
                     self.res = Some(res);
                     return self.handle_input(buf);

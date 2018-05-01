@@ -32,8 +32,8 @@ impl ServerBuilder {
             metrics: MetricBuilder::default(),
             dispatcher: DispatcherBuilder::new(),
             options: ServerOptions {
-                read_buffer_size: 4096,
-                write_buffer_size: 4096,
+                read_buffer_size: 8192,
+                write_buffer_size: 8192,
                 decode_options: DecodeOptions::default(),
             },
         }
@@ -92,7 +92,7 @@ impl ServerBuilder {
 
     /// Sets the application level read buffer size of the server in bytes.
     ///
-    /// The default value is `4096`.
+    /// The default value is `8192`.
     pub fn read_buffer_size(&mut self, n: usize) -> &mut Self {
         self.options.read_buffer_size = n;
         self
@@ -100,7 +100,7 @@ impl ServerBuilder {
 
     /// Sets the application level write buffer size of the server in bytes.
     ///
-    /// The default value is `4096`.
+    /// The default value is `8192`.
     pub fn write_buffer_size(&mut self, n: usize) -> &mut Self {
         self.options.write_buffer_size = n;
         self

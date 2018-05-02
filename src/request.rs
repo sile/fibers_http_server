@@ -43,6 +43,16 @@ impl<T> Req<T> {
         self.inner.into_body()
     }
 
+    /// Splits the head part and the body part of the request.
+    pub fn take_body(self) -> (Req<()>, T) {
+        let (inner, body) = self.inner.take_body();
+        let req = Req {
+            inner,
+            url: self.url,
+        };
+        (req, body)
+    }
+
     pub(crate) fn map_body<U, F>(self, f: F) -> Req<U>
     where
         F: FnOnce(T) -> U,

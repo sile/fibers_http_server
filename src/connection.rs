@@ -37,7 +37,7 @@ impl Connection {
         let _ = unsafe { stream.with_inner(|s| s.set_nodelay(true)) };
         let base_url = format!(
             "http://{}/",
-            track!(stream.peer_addr().map_err(Error::from))?
+            track!(stream.local_addr().map_err(Error::from))?
         );
         let base_url = track!(Url::parse(&base_url).map_err(Error::from))?;
 

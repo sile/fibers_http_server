@@ -1,7 +1,6 @@
 use std::mem;
 use slog::Logger;
-use bytecodec::Encode;
-use bytecodec::combinator::MaybeEos;
+use bytecodec::{Decode, Encode};
 use bytecodec::io::{BufferedIo, IoDecodeExt, IoEncodeExt};
 use fibers::net::TcpStream;
 use futures::{Async, Future, Poll};
@@ -20,7 +19,7 @@ pub struct Connection {
     logger: Logger,
     metrics: ServerMetrics,
     stream: BufferedIo<TcpStream>,
-    req_head_decoder: MaybeEos<RequestDecoder<NoBodyDecoder>>,
+    req_head_decoder: RequestDecoder<NoBodyDecoder>,
     dispatcher: Dispatcher,
     base_url: Url,
     phase: Phase,
@@ -42,10 +41,8 @@ impl Connection {
         let base_url = track!(Url::parse(&base_url).map_err(Error::from))?;
 
         metrics.connected_tcp_clients.increment();
-        let req_head_decoder = MaybeEos::new(RequestDecoder::with_options(
-            NoBodyDecoder,
-            options.decode_options.clone(),
-        ));
+        let req_head_decoder =
+            RequestDecoder::with_options(NoBodyDecoder, options.decode_options.clone());
         Ok(Connection {
             logger,
             metrics,
@@ -63,6 +60,10 @@ impl Connection {
     }
 
     fn read_request_head(&mut self) -> Phase {
+        if self.stream.is_eos() && self.req_head_decoder.is_idle() {
+            return Phase::Closed;
+        }
+
         let result = track!(
             self.req_head_decoder
                 .decode_from_read_buf(self.stream.read_buf_mut())

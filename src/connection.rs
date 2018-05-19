@@ -1,19 +1,19 @@
-use std::mem;
-use slog::Logger;
-use bytecodec::{DecodeExt, Encode};
 use bytecodec::combinator::MaybeEos;
 use bytecodec::io::{BufferedIo, IoDecodeExt, IoEncodeExt};
+use bytecodec::{DecodeExt, Encode};
 use fibers::net::TcpStream;
 use futures::{Async, Future, Poll};
 use httpcodec::{NoBodyDecoder, RequestDecoder};
+use slog::Logger;
+use std::mem;
 use url::Url;
 
-use {Error, Req, Result, Status};
 use dispatcher::Dispatcher;
 use handler::{BoxReply, HandleInput, RequestHandlerInstance};
 use metrics::ServerMetrics;
 use response::ResEncoder;
 use server::ServerOptions;
+use {Error, Req, Result, Status};
 
 #[derive(Debug)]
 pub struct Connection {

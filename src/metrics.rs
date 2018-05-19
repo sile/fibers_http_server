@@ -1,20 +1,20 @@
 //! [Prometheus][prometheus] metrics.
 //!
 //! [prometheus]: https://prometheus.io/
-use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use atomic_immut::AtomicImmut;
 use bytecodec::bytes::Utf8Encoder;
 use bytecodec::marker::Never;
-use bytecodec::value::NullDecoder;
-use futures::{self, Async, Future, Poll};
+use bytecodec::null::NullDecoder;
 use futures::future::Finished;
+use futures::{self, Async, Future, Poll};
 use httpcodec::{BodyDecoder, BodyEncoder};
 use prometrics;
 use prometrics::bucket::Bucket;
 use prometrics::metrics::{Counter, Histogram, MetricBuilder};
+use std::collections::HashMap;
+use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use {Error, HandleRequest, Req, Res, Status};
 

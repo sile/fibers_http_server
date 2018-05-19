@@ -1,5 +1,5 @@
-use std::fmt;
 use httpcodec::{Header, HttpVersion, Request};
+use std::fmt;
 use url::Url;
 
 use {Error, ErrorKind, Result};

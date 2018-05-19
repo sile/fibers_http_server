@@ -1,9 +1,9 @@
-use std::fmt;
-use bytecodec::{self, ByteCount, Encode, EncodeExt, Eos};
 use bytecodec::bytes::Utf8Encoder;
 use bytecodec::marker::Never;
+use bytecodec::{self, ByteCount, Encode, EncodeExt, Eos};
 use httpcodec::{BodyEncoder, Header, HeaderMut, HttpVersion, ReasonPhrase, Response,
                 ResponseEncoder, StatusCode};
+use std::fmt;
 
 use header;
 use status::Status;

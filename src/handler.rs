@@ -1,15 +1,15 @@
-use std::fmt;
-use std::marker::PhantomData;
-use std::sync::Arc;
 use bytecodec::EncodeExt;
 use bytecodec::io::{IoDecodeExt, ReadBuf};
 use bytecodec::marker::Never;
 use factory::{DefaultFactory, Factory};
 use futures::{self, Future, Poll};
 use httpcodec::{BodyDecode, BodyEncode, ResponseEncoder};
+use std::fmt;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
-use {Error, Req, Res, Result};
 use response::ResEncoder;
+use {Error, Req, Res, Result};
 
 /// `HandleRequest` allows for handling HTTP requests.
 pub trait HandleRequest: Sized + Send + Sync + 'static {

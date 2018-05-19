@@ -1,10 +1,10 @@
+use factory::Factory;
 use std::result::Result as StdResult;
 use std::sync::Arc;
-use factory::Factory;
 use url::Url;
 
-use {ErrorKind, HandleRequest, HandlerOptions, Req, Result, Status};
 use handler::{RequestHandlerFactory, RequestHandlerInstance};
+use {ErrorKind, HandleRequest, HandlerOptions, Req, Result, Status};
 
 type Method = &'static str;
 
@@ -201,8 +201,8 @@ mod test {
     use httpcodec::{BodyDecoder, NoBodyEncoder};
     use url::Url;
 
-    use {Reply, Req, Res, Status};
     use super::*;
+    use {Reply, Req, Res, Status};
 
     macro_rules! define_handler {
         ($handler:ident, $method:expr, $path:expr) => {
@@ -221,7 +221,7 @@ mod test {
                     Box::new(ok(Res::new(Status::Ok, ())))
                 }
             }
-        }
+        };
     }
 
     define_handler!(Handler0, "GET", "/");

@@ -1,18 +1,18 @@
-use std::net::SocketAddr;
-use slog::{Discard, Logger};
 use factory::Factory;
-use fibers::{BoxSpawn, Spawn};
 use fibers::net::TcpListener;
 use fibers::net::futures::{Connected, TcpListenerBind};
 use fibers::net::streams::Incoming;
+use fibers::{BoxSpawn, Spawn};
 use futures::{Async, Future, Poll, Stream};
 use httpcodec::DecodeOptions;
 use prometrics::metrics::MetricBuilder;
+use slog::{Discard, Logger};
+use std::net::SocketAddr;
 
-use {Error, HandleRequest, HandlerOptions, Result};
 use connection::Connection;
 use dispatcher::{Dispatcher, DispatcherBuilder};
 use metrics::ServerMetrics;
+use {Error, HandleRequest, HandlerOptions, Result};
 
 /// HTTP server builder.
 #[derive(Debug)]

@@ -103,15 +103,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod test {
-    use std::io::{Read, Write};
-    use std::net::TcpStream;
-    use std::thread;
-    use std::time::Duration;
     use bytecodec::bytes::Utf8Encoder;
     use bytecodec::value::NullDecoder;
     use fibers::{Executor, InPlaceExecutor, Spawn};
     use futures::future::{ok, Future};
     use httpcodec::{BodyDecoder, BodyEncoder};
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::thread;
+    use std::time::Duration;
 
     use super::*;
 

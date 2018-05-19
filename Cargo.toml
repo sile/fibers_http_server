@@ -15,13 +15,13 @@ codecov = {repository = "sile/fibers_http_server"}
 
 [dependencies]
 atomic_immut = "0.1"
-bytecodec = "0.3"
+bytecodec = "0.4"
 factory = "0.1"
 fibers = "0.1"
 futures = "0.1"
 httpcodec = "0.2"
 prometrics = "0.1"
-slog = {version = "2", features = ["release_max_level_debug"]}
+slog = "2"
 trackable = "0.2"
 url = "1"
 

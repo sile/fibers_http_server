@@ -1,7 +1,7 @@
-use std;
 use bytecodec;
-use trackable::error::{Failure, TrackableError};
+use std;
 use trackable::error::{ErrorKind as TrackableErrorKind, ErrorKindExt};
+use trackable::error::{Failure, TrackableError};
 use url;
 
 /// This crate specific `Error` type.

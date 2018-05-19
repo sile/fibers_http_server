@@ -1,6 +1,6 @@
 use bytecodec::combinator::MaybeEos;
 use bytecodec::io::{BufferedIo, IoDecodeExt, IoEncodeExt};
-use bytecodec::{DecodeExt, Encode};
+use bytecodec::{Decode, DecodeExt, Encode};
 use fibers::net::TcpStream;
 use futures::{Async, Future, Poll};
 use httpcodec::{NoBodyDecoder, RequestDecoder};
@@ -61,10 +61,15 @@ impl Connection {
     }
 
     fn read_request_head(&mut self) -> Phase {
-        let result = track!(
-            self.req_head_decoder
-                .decode_from_read_buf(self.stream.read_buf_mut())
-        );
+        let result = self.req_head_decoder
+            .decode_from_read_buf(self.stream.read_buf_mut())
+            .and_then(|()| {
+                if self.req_head_decoder.is_idle() {
+                    self.req_head_decoder.finish_decoding().map(Some)
+                } else {
+                    Ok(None)
+                }
+            });
         match result {
             Err(e) => {
                 warn!(

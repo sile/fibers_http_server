@@ -81,9 +81,8 @@ impl ResEncoder {
         let mut res = Res::new(status, status.reason_phrase());
         res.header_mut().add_field(header::Connection::Close);
 
-        let mut encoder = ResponseEncoder::new(BodyEncoder::new(Utf8Encoder::new()));
-        encoder.start_encoding(res.0).expect("Never fails");
-        ResEncoder(Box::new(encoder.last()))
+        let encoder = ResponseEncoder::new(BodyEncoder::new(Utf8Encoder::new()));
+        ResEncoder(Box::new(encoder.last(res.0)))
     }
 }
 impl fmt::Debug for ResEncoder {

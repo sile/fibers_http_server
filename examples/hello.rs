@@ -9,7 +9,7 @@ extern crate sloggers;
 extern crate trackable;
 
 use bytecodec::bytes::Utf8Encoder;
-use bytecodec::value::NullDecoder;
+use bytecodec::null::NullDecoder;
 use fibers::{Executor, Spawn, ThreadPoolExecutor};
 use fibers_http_server::metrics::{MetricsHandler, WithMetrics};
 use fibers_http_server::{HandleRequest, Reply, Req, Res, ServerBuilder, Status};

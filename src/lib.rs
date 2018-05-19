@@ -13,7 +13,7 @@
 //! use std::thread;
 //! use std::time::Duration;
 //! use bytecodec::bytes::Utf8Encoder;
-//! use bytecodec::value::NullDecoder;
+//! use bytecodec::null::NullDecoder;
 //! use fibers::{Executor, Spawn, InPlaceExecutor};
 //! use fibers_http_server::{HandleRequest, Reply, Req, Res, ServerBuilder, Status};
 //! use futures::future::{ok, Future};
@@ -104,7 +104,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[cfg(test)]
 mod test {
     use bytecodec::bytes::Utf8Encoder;
-    use bytecodec::value::NullDecoder;
+    use bytecodec::null::NullDecoder;
     use fibers::{Executor, InPlaceExecutor, Spawn};
     use futures::future::{ok, Future};
     use httpcodec::{BodyDecoder, BodyEncoder};

@@ -196,7 +196,7 @@ enum Segment {
 
 #[cfg(test)]
 mod test {
-    use bytecodec::value::NullDecoder;
+    use bytecodec::null::NullDecoder;
     use futures::future::ok;
     use httpcodec::{BodyDecoder, NoBodyEncoder};
     use url::Url;

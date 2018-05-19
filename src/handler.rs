@@ -1,6 +1,6 @@
-use bytecodec::EncodeExt;
 use bytecodec::io::{IoDecodeExt, ReadBuf};
 use bytecodec::marker::Never;
+use bytecodec::{Decode, EncodeExt};
 use factory::{DefaultFactory, Factory};
 use futures::{self, Future, Poll};
 use httpcodec::{BodyDecode, BodyEncode, ResponseEncoder};
@@ -175,7 +175,14 @@ impl<H: HandleRequest> HandleInput for InputHandler<H> {
             return Ok(Some(BoxReply::new::<_, H>(futures::finished(res), encoder)));
         }
 
-        match self.decoder.decode_from_read_buf(buf) {
+        let result = self.decoder.decode_from_read_buf(buf).and_then(|()| {
+            if self.decoder.is_idle() {
+                self.decoder.finish_decoding().map(Some)
+            } else {
+                Ok(None)
+            }
+        });
+        match result {
             Err(e) => {
                 let e = track!(Error::from(e));
                 let req = self.req_head.take().expect("Never fails");
@@ -272,7 +279,7 @@ impl BoxReply {
     {
         let future = reply.and_then(move |res| {
             let body_encoder = Box::new(encoder);
-            let encoder = ResponseEncoder::new(body_encoder).last_item(res.0);
+            let encoder = ResponseEncoder::new(body_encoder).last(res.0);
             futures::finished(ResEncoder::new(encoder))
         });
         BoxReply(Box::new(future))

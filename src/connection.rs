@@ -34,7 +34,7 @@ impl Connection {
         dispatcher: Dispatcher,
         options: &ServerOptions,
     ) -> Result<Self> {
-        let _ = unsafe { stream.with_inner(|s| s.set_nodelay(true)) };
+        let _ = stream.set_nodelay(true);
         let base_url = format!(
             "http://{}/",
             track!(stream.local_addr().map_err(Error::from))?

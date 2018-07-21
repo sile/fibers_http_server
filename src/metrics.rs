@@ -5,8 +5,8 @@ use atomic_immut::AtomicImmut;
 use bytecodec::bytes::Utf8Encoder;
 use bytecodec::marker::Never;
 use bytecodec::null::NullDecoder;
-use futures::future::Finished;
-use futures::{self, Async, Future, Poll};
+use fibers::sync::oneshot;
+use futures::{Async, Future, Poll};
 use httpcodec::{BodyDecoder, BodyEncoder};
 use prometrics;
 use prometrics::bucket::Bucket;
@@ -14,6 +14,7 @@ use prometrics::metrics::{Counter, Histogram, MetricBuilder};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Instant;
 
 use {Error, HandleRequest, Req, Res, Status};
@@ -153,17 +154,21 @@ impl HandleRequest for MetricsHandler {
     type ResBody = String;
     type Decoder = BodyDecoder<NullDecoder>;
     type Encoder = BodyEncoder<Utf8Encoder>;
-    type Reply = Finished<Res<Self::ResBody>, Never>;
+    type Reply = Box<Future<Item = Res<Self::ResBody>, Error = Never> + Send + 'static>;
 
     fn handle_request(&self, _req: Req<Self::ReqBody>) -> Self::Reply {
-        let res = match prometrics::default_gatherer().lock() {
-            Err(e) => Res::new(Status::InternalServerError, e.to_string()),
-            Ok(mut gatherer) => {
-                let metrics = gatherer.gather().to_text();
-                Res::new(Status::Ok, metrics)
-            }
-        };
-        futures::finished(res)
+        let (tx, rx) = oneshot::channel();
+        thread::spawn(move || {
+            let res = match prometrics::default_gatherer().lock() {
+                Err(e) => Res::new(Status::InternalServerError, e.to_string()),
+                Ok(mut gatherer) => {
+                    let metrics = gatherer.gather().to_text();
+                    Res::new(Status::Ok, metrics)
+                }
+            };
+            let _ = tx.send(res);
+        });
+        Box::new(rx.or_else(|e| Ok(Res::new(Status::InternalServerError, e.to_string()))))
     }
 }
 

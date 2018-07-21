@@ -15,9 +15,9 @@ use fibers_http_server::metrics::{MetricsHandler, WithMetrics};
 use fibers_http_server::{HandleRequest, Reply, Req, Res, ServerBuilder, Status};
 use futures::future::ok;
 use httpcodec::{BodyDecoder, BodyEncoder};
-use sloggers::Build;
 use sloggers::terminal::TerminalLoggerBuilder;
 use sloggers::types::Severity;
+use sloggers::Build;
 
 fn main() {
     let logger = track_try_unwrap!(TerminalLoggerBuilder::new().level(Severity::Debug).build());

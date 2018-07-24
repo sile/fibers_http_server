@@ -7,6 +7,7 @@ homepage = "https://github.com/sile/fibers_http_server"
 repository = "https://github.com/sile/fibers_http_server"
 readme = "README.md"
 keywords = ["http"]
+categories = ["web-programming::http-server"]
 license = "MIT"
 
 [badges]

@@ -181,8 +181,8 @@ impl fmt::Display for Status {
 }
 impl Status {
     /// Returns the code of the status.
-    pub fn code(&self) -> u16 {
-        match *self {
+    pub fn code(self) -> u16 {
+        match self {
             Status::Continue => 100,
             Status::SwitchingProtocols => 101,
             Status::Processing => 102,
@@ -244,8 +244,8 @@ impl Status {
     }
 
     /// Returns the typical reason phrase of the status.
-    pub fn reason_phrase(&self) -> &'static str {
-        match *self {
+    pub fn reason_phrase(self) -> &'static str {
+        match self {
             Status::Continue => "Continue",
             Status::SwitchingProtocols => "Switching Protocols",
             Status::Processing => "Processing",

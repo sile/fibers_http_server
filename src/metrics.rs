@@ -318,7 +318,8 @@ impl HandlerMetrics {
     }
 
     fn increment_status(&self, status: u16) {
-        if self.requests
+        if self
+            .requests
             .load()
             .get(&status)
             .map(|c| c.increment())

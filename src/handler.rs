@@ -196,7 +196,8 @@ impl<H: HandleRequest> HandleInput for InputHandler<H> {
             }
             Ok(None) => Ok(None),
             Ok(Some(body)) => {
-                let req = self.req_head
+                let req = self
+                    .req_head
                     .take()
                     .expect("Never fails")
                     .map_body(|()| body);

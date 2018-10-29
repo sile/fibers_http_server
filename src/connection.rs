@@ -6,6 +6,8 @@ use futures::{Async, Future, Poll};
 use httpcodec::{NoBodyDecoder, RequestDecoder};
 use slog::Logger;
 use std::mem;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use url::Url;
 
 use dispatcher::Dispatcher;
@@ -22,6 +24,7 @@ pub struct Connection {
     stream: BufferedIo<TcpStream>,
     req_head_decoder: MaybeEos<RequestDecoder<NoBodyDecoder>>,
     dispatcher: Dispatcher,
+    is_server_alive: Arc<AtomicBool>,
     base_url: Url,
     phase: Phase,
     do_close: bool,
@@ -32,6 +35,7 @@ impl Connection {
         metrics: ServerMetrics,
         stream: TcpStream,
         dispatcher: Dispatcher,
+        is_server_alive: Arc<AtomicBool>,
         options: &ServerOptions,
     ) -> Result<Self> {
         let _ = stream.set_nodelay(true);
@@ -50,6 +54,7 @@ impl Connection {
             stream: BufferedIo::new(stream, options.read_buffer_size, options.write_buffer_size),
             req_head_decoder: req_head_decoder.maybe_eos(),
             dispatcher,
+            is_server_alive,
             base_url,
             phase: Phase::ReadRequestHead,
             do_close: false,
@@ -57,11 +62,14 @@ impl Connection {
     }
 
     fn is_closed(&self) -> bool {
-        self.stream.is_eos() || (self.stream.write_buf_ref().is_empty() && self.phase.is_closed())
+        self.stream.is_eos()
+            || (self.stream.write_buf_ref().is_empty() && self.phase.is_closed())
+            || !self.is_server_alive.load(Ordering::SeqCst)
     }
 
     fn read_request_head(&mut self) -> Phase {
-        let result = self.req_head_decoder
+        let result = self
+            .req_head_decoder
             .decode_from_read_buf(self.stream.read_buf_mut())
             .and_then(|()| {
                 if self.req_head_decoder.is_idle() {

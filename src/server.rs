@@ -8,6 +8,8 @@ use httpcodec::DecodeOptions;
 use prometrics::metrics::MetricBuilder;
 use slog::{Discard, Logger};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use connection::Connection;
 use dispatcher::{Dispatcher, DispatcherBuilder};
@@ -128,6 +130,7 @@ impl ServerBuilder {
             spawner: spawner.boxed(),
             listener: Listener::Binding(TcpListener::bind(self.bind_addr)),
             dispatcher: self.dispatcher.finish(),
+            is_server_alive: Arc::new(AtomicBool::new(true)),
             options: self.options,
             connected: Vec::new(),
         }
@@ -137,6 +140,7 @@ impl ServerBuilder {
 /// HTTP server.
 ///
 /// This is created via `ServerBuilder`.
+#[must_use = "future do nothing unless polled"]
 #[derive(Debug)]
 pub struct Server {
     logger: Logger,
@@ -144,6 +148,7 @@ pub struct Server {
     spawner: BoxSpawn,
     listener: Listener,
     dispatcher: Dispatcher,
+    is_server_alive: Arc<AtomicBool>,
     options: ServerOptions,
     connected: Vec<(SocketAddr, Connected)>,
 }
@@ -184,6 +189,7 @@ impl Future for Server {
                     self.metrics.clone(),
                     stream,
                     self.dispatcher.clone(),
+                    Arc::clone(&self.is_server_alive),
                     &self.options,
                 ))?;
                 self.spawner.spawn(future);
@@ -192,6 +198,11 @@ impl Future for Server {
             }
         }
         Ok(Async::NotReady)
+    }
+}
+impl Drop for Server {
+    fn drop(&mut self) {
+        self.is_server_alive.store(false, Ordering::SeqCst);
     }
 }
 

@@ -1,7 +1,5 @@
 extern crate fibers_global;
 extern crate fibers_http_server;
-extern crate futures;
-extern crate slog;
 #[macro_use]
 extern crate trackable;
 

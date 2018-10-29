@@ -27,4 +27,5 @@ trackable = "0.2"
 url = "1"
 
 [dev-dependencies]
+fibers_global = "0.1"
 sloggers = "0.2"

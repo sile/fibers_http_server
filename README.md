@@ -1,7 +1,7 @@
 fibers_http_server
 ==================
 
-[![fibers_http_server](http://meritbadge.herokuapp.com/fibers_http_server)](https://crates.io/crates/fibers_http_server)
+[![fibers_http_server](https://img.shields.io/crates/v/fibers_http_server.svg)](https://crates.io/crates/fibers_http_server)
 [![Documentation](https://docs.rs/fibers_http_server/badge.svg)](https://docs.rs/fibers_http_server)
 [![Build Status](https://travis-ci.org/sile/fibers_http_server.svg?branch=master)](https://travis-ci.org/sile/fibers_http_server)
 [![Code Coverage](https://codecov.io/gh/sile/fibers_http_server/branch/master/graph/badge.svg)](https://codecov.io/gh/sile/fibers_http_server/branch/master)

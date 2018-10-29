@@ -1,16 +1,25 @@
 language: rust
 sudo: required
+
 rust:
   - stable
   - beta
   - nightly
+
 matrix:
   allow_failures:
     - rust: nightly
 
 env:
   global:
-  - RUSTFLAGS="-C link-dead-code"
+    - RUSTFLAGS="-C link-dead-code -D warnings"
+
+before_script:
+  - rustup component add clippy-preview
+
+script:
+  - cargo test --verbose --all-features
+  - cargo clippy --verbose --all-features
 
 addons:
   apt:
@@ -34,6 +43,6 @@ after_success: |
   make install DESTDIR=../../kcov-build &&
   cd ../.. &&
   rm -rf kcov-master &&
-  for file in target/debug/fibers_http_server-*[^\.d]; do mkdir -p "target/cov/$(basename $file)"; ./kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+  for file in target/debug/*; do if ! [ -x $file -a -f $file ]; then continue; fi; mkdir -p "target/cov/$(basename $file)"; ./kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
   bash <(curl -s https://codecov.io/bash) &&
   echo "Uploaded code coverage"

@@ -92,8 +92,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 mod test {
     use bytecodec::bytes::Utf8Encoder;
     use bytecodec::null::NullDecoder;
-    use fibers::{Executor, InPlaceExecutor, Spawn};
-    use futures::future::{ok, Future};
+    use futures::future::ok;
     use httpcodec::{BodyDecoder, BodyEncoder};
     use std::io::{Read, Write};
     use std::net::TcpStream;
@@ -120,14 +119,12 @@ mod test {
 
     #[test]
     fn it_works() {
-        let addr = "127.0.0.1:14757".parse().unwrap();
+        let mut builder = ServerBuilder::new(([127, 0, 0, 1], 0).into());
+        builder.add_handler(Hello).unwrap();
+        let server = builder.finish(fibers_global::handle());
+        let (server, addr) = fibers_global::execute(server.local_addr()).unwrap();
         thread::spawn(move || {
-            let executor = InPlaceExecutor::new().unwrap();
-            let mut builder = ServerBuilder::new(addr);
-            builder.add_handler(Hello).unwrap();
-            let server = builder.finish(executor.handle());
-            executor.spawn(server.map_err(|e| panic!("{}", e)));
-            executor.run().unwrap()
+            fibers_global::execute(server).unwrap();
         });
         thread::sleep(Duration::from_millis(100));
 

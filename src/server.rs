@@ -6,7 +6,8 @@ use factory::Factory;
 use fibers::net::futures::{Connected, TcpListenerBind};
 use fibers::net::streams::Incoming;
 use fibers::net::TcpListener;
-use fibers::{BoxSpawn, Spawn};
+use fibers::{self, BoxSpawn, Spawn};
+use futures::future::{loop_fn, ok, Either, Loop};
 use futures::{Async, Future, Poll, Stream};
 use httpcodec::DecodeOptions;
 use prometrics::metrics::MetricBuilder;
@@ -152,6 +153,28 @@ pub struct Server {
     connected: Vec<(SocketAddr, Connected)>,
 }
 impl Server {
+    /// Returns a future that retrieves the address to which the server is bound.
+    pub fn local_addr(self) -> impl Future<Item = (Self, SocketAddr), Error = Error> {
+        match self.listener {
+            Listener::Listening { local_addr, .. } => Either::A(ok((self, local_addr))),
+            Listener::Binding(_) => {
+                let future = loop_fn(self, |mut this| {
+                    if fibers::fiber::with_current_context(|_| ()).is_none() {
+                        return Ok(Loop::Continue(this));
+                    }
+
+                    track!(this.listener.poll())?;
+                    if let Listener::Listening { local_addr, .. } = this.listener {
+                        Ok(Loop::Break((this, local_addr)))
+                    } else {
+                        Ok(Loop::Continue(this))
+                    }
+                });
+                Either::B(future)
+            }
+        }
+    }
+
     /// Returns the metrics of the server.
     pub fn metrics(&self) -> &ServerMetrics {
         &self.metrics
@@ -208,7 +231,10 @@ impl Drop for Server {
 #[derive(Debug)]
 enum Listener {
     Binding(TcpListenerBind),
-    Listening(Incoming),
+    Listening {
+        incoming: Incoming,
+        local_addr: SocketAddr,
+    },
 }
 impl Stream for Listener {
     type Item = (Connected, SocketAddr);
@@ -219,13 +245,20 @@ impl Stream for Listener {
             let next = match *self {
                 Listener::Binding(ref mut f) => {
                     if let Async::Ready(listener) = track!(f.poll().map_err(Error::from))? {
-                        Listener::Listening(listener.incoming())
+                        let local_addr = track!(listener.local_addr().map_err(Error::from))?;
+                        let incoming = listener.incoming();
+                        Listener::Listening {
+                            incoming,
+                            local_addr,
+                        }
                     } else {
                         return Ok(Async::NotReady);
                     }
                 }
-                Listener::Listening(ref mut s) => {
-                    return track!(s.poll().map_err(Error::from));
+                Listener::Listening {
+                    ref mut incoming, ..
+                } => {
+                    return track!(incoming.poll().map_err(Error::from));
                 }
             };
             *self = next;

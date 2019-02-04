@@ -1,6 +1,7 @@
 //! [Prometheus][prometheus] metrics.
 //!
 //! [prometheus]: https://prometheus.io/
+use crate::{Error, HandleRequest, Req, Res, Status};
 use atomic_immut::AtomicImmut;
 use bytecodec::bytes::Utf8Encoder;
 use bytecodec::marker::Never;
@@ -16,8 +17,6 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-
-use {Error, HandleRequest, Req, Res, Status};
 
 /// HTTP server metrics.
 #[derive(Debug, Clone)]

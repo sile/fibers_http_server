@@ -1,8 +1,7 @@
+use crate::{Error, ErrorKind, Result};
 use httpcodec::{Header, HttpVersion, Request};
 use std::fmt;
 use url::Url;
-
-use {Error, ErrorKind, Result};
 
 /// HTTP request.
 #[derive(Debug)]

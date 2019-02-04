@@ -1,3 +1,5 @@
+use crate::response::ResEncoder;
+use crate::{Error, Req, Res, Result};
 use bytecodec::io::{IoDecodeExt, ReadBuf};
 use bytecodec::marker::Never;
 use bytecodec::{Decode, EncodeExt};
@@ -7,9 +9,6 @@ use httpcodec::{BodyDecode, BodyEncode, ResponseEncoder};
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
-
-use response::ResEncoder;
-use {Error, Req, Res, Result};
 
 /// `HandleRequest` allows for handling HTTP requests.
 pub trait HandleRequest: Sized + Send + Sync + 'static {
@@ -68,7 +67,6 @@ pub struct HandlerOptions<H, D, E> {
     decoder_factory: D,
     encoder_factory: E,
 }
-#[cfg_attr(feature = "cargo-clippy", allow(new_without_default_derive))]
 impl<H> HandlerOptions<H, (), ()> {
     /// Makes a new `HandlerOptions` instance.
     pub fn new() -> Self {

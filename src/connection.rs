@@ -1,3 +1,9 @@
+use crate::dispatcher::Dispatcher;
+use crate::handler::{BoxReply, HandleInput, RequestHandlerInstance};
+use crate::metrics::ServerMetrics;
+use crate::response::ResEncoder;
+use crate::server::ServerOptions;
+use crate::{Error, Req, Result, Status};
 use bytecodec::combinator::MaybeEos;
 use bytecodec::io::{BufferedIo, IoDecodeExt, IoEncodeExt};
 use bytecodec::{Decode, DecodeExt, Encode};
@@ -9,13 +15,6 @@ use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use url::Url;
-
-use dispatcher::Dispatcher;
-use handler::{BoxReply, HandleInput, RequestHandlerInstance};
-use metrics::ServerMetrics;
-use response::ResEncoder;
-use server::ServerOptions;
-use {Error, Req, Result, Status};
 
 #[derive(Debug)]
 pub struct Connection {

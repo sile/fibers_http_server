@@ -1,3 +1,5 @@
+use crate::header;
+use crate::status::Status;
 use bytecodec::bytes::Utf8Encoder;
 use bytecodec::marker::Never;
 use bytecodec::{self, ByteCount, Encode, EncodeExt, Eos};
@@ -6,9 +8,6 @@ use httpcodec::{
     StatusCode,
 };
 use std::fmt;
-
-use header;
-use status::Status;
 
 /// HTTP response.
 ///

@@ -1,10 +1,9 @@
+use crate::handler::{RequestHandlerFactory, RequestHandlerInstance};
+use crate::{ErrorKind, HandleRequest, HandlerOptions, Req, Result, Status};
 use factory::Factory;
 use std::result::Result as StdResult;
 use std::sync::Arc;
 use url::Url;
-
-use handler::{RequestHandlerFactory, RequestHandlerInstance};
-use {ErrorKind, HandleRequest, HandlerOptions, Req, Result, Status};
 
 type Method = &'static str;
 
@@ -196,13 +195,12 @@ enum Segment {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use crate::{Reply, Req, Res, Status};
     use bytecodec::null::NullDecoder;
     use futures::future::ok;
     use httpcodec::{BodyDecoder, NoBodyEncoder};
     use url::Url;
-
-    use super::*;
-    use {Reply, Req, Res, Status};
 
     macro_rules! define_handler {
         ($handler:ident, $method:expr, $path:expr) => {

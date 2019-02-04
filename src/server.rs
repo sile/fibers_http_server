@@ -1,3 +1,7 @@
+use crate::connection::Connection;
+use crate::dispatcher::{Dispatcher, DispatcherBuilder};
+use crate::metrics::ServerMetrics;
+use crate::{Error, HandleRequest, HandlerOptions, Result};
 use factory::Factory;
 use fibers::net::futures::{Connected, TcpListenerBind};
 use fibers::net::streams::Incoming;
@@ -10,11 +14,6 @@ use slog::{Discard, Logger};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
-use connection::Connection;
-use dispatcher::{Dispatcher, DispatcherBuilder};
-use metrics::ServerMetrics;
-use {Error, HandleRequest, HandlerOptions, Result};
 
 /// HTTP server builder.
 #[derive(Debug)]

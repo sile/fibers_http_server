@@ -9,6 +9,7 @@ readme = "README.md"
 keywords = ["http"]
 categories = ["web-programming::http-server"]
 license = "MIT"
+edition = "2018"
 
 [badges]
 travis-ci = {repository = "sile/fibers_http_server"}
@@ -28,4 +29,4 @@ url = "1"
 
 [dev-dependencies]
 fibers_global = "0.1"
-sloggers = "0.2"
+sloggers = "0.3"

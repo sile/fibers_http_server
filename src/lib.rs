@@ -3,11 +3,6 @@
 //! # Examples
 //!
 //! ```
-//! # extern crate bytecodec;
-//! # extern crate fibers;
-//! # extern crate fibers_http_server;
-//! # extern crate futures;
-//! # extern crate httpcodec;
 //! use std::io::{Read, Write};
 //! use std::net::TcpStream;
 //! use std::thread;
@@ -66,18 +61,10 @@
 //! # }
 //! ```
 #![warn(missing_docs)]
-extern crate atomic_immut;
-extern crate bytecodec;
-extern crate factory;
-extern crate fibers;
-extern crate futures;
-extern crate httpcodec;
-extern crate prometrics;
 #[macro_use]
 extern crate slog;
 #[macro_use]
 extern crate trackable;
-extern crate url;
 
 pub use error::{Error, ErrorKind};
 pub use handler::{HandleRequest, HandlerOptions, Reply};

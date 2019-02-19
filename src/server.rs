@@ -6,6 +6,7 @@ use factory::Factory;
 use fibers::net::futures::{Connected, TcpListenerBind};
 use fibers::net::streams::Incoming;
 use fibers::net::TcpListener;
+use fibers::time::timer;
 use fibers::{self, BoxSpawn, Spawn};
 use futures::future::{loop_fn, ok, Either, Loop};
 use futures::{Async, Future, Poll, Stream};
@@ -15,6 +16,7 @@ use slog::{Discard, Logger};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 /// HTTP server builder.
 #[derive(Debug)]
@@ -133,6 +135,7 @@ impl ServerBuilder {
             is_server_alive: Arc::new(AtomicBool::new(true)),
             options: self.options,
             connected: Vec::new(),
+            stop_timer: None,
         }
     }
 }
@@ -151,6 +154,7 @@ pub struct Server {
     is_server_alive: Arc<AtomicBool>,
     options: ServerOptions,
     connected: Vec<(SocketAddr, Connected)>,
+    stop_timer: Option<timer::Timeout>,
 }
 impl Server {
     /// Returns a future that retrieves the address to which the server is bound.
@@ -179,6 +183,14 @@ impl Server {
     pub fn metrics(&self) -> &ServerMetrics {
         &self.metrics
     }
+
+    /// Stops this server and waits for a moment.
+    /// Use this method when you want to deny a new request before stopping to minimize dropped connections.
+    pub fn stop(&mut self, waiting_time: Duration) {
+        // we don't care if a precedence timer exists already and is discarded here.
+        // Discarding an existing timer makes a shutdown time longer, but it's not a big problem.
+        self.stop_timer = Some(timer::timeout(waiting_time));
+    }
 }
 impl Future for Server {
     type Item = ();
@@ -186,6 +198,12 @@ impl Future for Server {
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         loop {
+            // Avoids a new connection for shutdown.
+            match self.stop_timer.poll().expect("Broken timer") {
+                Async::Ready(Some(_)) => return Ok(Async::Ready(())),
+                Async::NotReady => break,
+                _ => {}
+            };
             match track!(self.listener.poll())? {
                 Async::NotReady => {
                     break;

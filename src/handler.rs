@@ -187,7 +187,7 @@ impl<H: HandleRequest> HandleInput for InputHandler<H> {
                 if let Some(res) = self.req_handler.handle_decoding_error(req, &e) {
                     self.is_closed = true;
                     self.res = Some(res);
-                    return self.handle_input(buf);
+                    self.handle_input(buf)
                 } else {
                     Err(e)
                 }

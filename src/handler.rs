@@ -211,7 +211,7 @@ impl<H: HandleRequest> HandleInput for InputHandler<H> {
     }
 }
 
-pub struct RequestHandlerInstance(Box<HandleInput + Send + 'static>);
+pub struct RequestHandlerInstance(Box<dyn HandleInput + Send + 'static>);
 impl HandleInput for RequestHandlerInstance {
     fn init(&mut self, req: Req<()>) -> Result<()> {
         self.0.init(req)
@@ -232,7 +232,7 @@ impl fmt::Debug for RequestHandlerInstance {
 }
 
 pub struct RequestHandlerFactory {
-    inner: Box<Fn() -> RequestHandlerInstance + Send + Sync + 'static>,
+    inner: Box<dyn Fn() -> RequestHandlerInstance + Send + Sync + 'static>,
 }
 impl RequestHandlerFactory {
     pub fn new<H, D, E>(req_handler: H, options: HandlerOptions<H, D, E>) -> Self
@@ -267,9 +267,9 @@ impl fmt::Debug for RequestHandlerFactory {
 }
 
 /// An alias of the typical `Future` that can be used as the result of `HandleRequest::handle_request` method.
-pub type Reply<T> = Box<Future<Item = Res<T>, Error = Never> + Send + 'static>;
+pub type Reply<T> = Box<dyn Future<Item = Res<T>, Error = Never> + Send + 'static>;
 
-pub struct BoxReply(Box<Future<Item = ResEncoder, Error = Never> + Send + 'static>);
+pub struct BoxReply(Box<dyn Future<Item = ResEncoder, Error = Never> + Send + 'static>);
 impl BoxReply {
     fn new<F, H>(reply: F, encoder: H::Encoder) -> Self
     where

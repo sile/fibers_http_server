@@ -153,7 +153,7 @@ impl HandleRequest for MetricsHandler {
     type ResBody = String;
     type Decoder = BodyDecoder<NullDecoder>;
     type Encoder = BodyEncoder<Utf8Encoder>;
-    type Reply = Box<Future<Item = Res<Self::ResBody>, Error = Never> + Send + 'static>;
+    type Reply = Box<dyn Future<Item = Res<Self::ResBody>, Error = Never> + Send + 'static>;
 
     fn handle_request(&self, _req: Req<Self::ReqBody>) -> Self::Reply {
         let (tx, rx) = oneshot::channel();

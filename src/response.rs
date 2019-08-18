@@ -69,7 +69,7 @@ impl<T> From<Response<T>> for Res<T> {
     }
 }
 
-pub struct ResEncoder(Box<Encode<Item = Never> + Send + 'static>);
+pub struct ResEncoder(Box<dyn Encode<Item = Never> + Send + 'static>);
 impl ResEncoder {
     pub fn new<E>(inner: E) -> Self
     where

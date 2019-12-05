@@ -31,7 +31,6 @@
 //!     }
 //! }
 //!
-//! # fn main() {
 //! let addr = "127.0.0.1:14758".parse().unwrap();
 //!
 //! // HTTP server
@@ -58,7 +57,6 @@
 //!     &buf[..size],
 //!     b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello".as_ref()
 //! );
-//! # }
 //! ```
 #![warn(missing_docs)]
 #[macro_use]

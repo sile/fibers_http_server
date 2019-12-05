@@ -185,7 +185,16 @@ impl<H: HandleRequest> WithMetrics<H> {
 
     /// Makes a new `WithMetrics` instance with the given `MetricBuilder`.
     pub fn with_metrics(inner: H, metric_builder: MetricBuilder) -> Self {
-        let metrics = HandlerMetrics::new::<H>(metric_builder);
+        Self::with_metrics_and_bucket_config(inner, metric_builder, BucketConfig::default())
+    }
+
+    /// Makes a new `WithMetrics` instance with the given `MetricBuilder` and `BucketConfig`.
+    pub fn with_metrics_and_bucket_config(
+        inner: H,
+        metric_builder: MetricBuilder,
+        bucket_config: BucketConfig,
+    ) -> Self {
+        let metrics = HandlerMetrics::new::<H>(metric_builder, bucket_config);
         WithMetrics { inner, metrics }
     }
 
@@ -287,8 +296,7 @@ impl HandlerMetrics {
         self.request_duration_seconds.buckets()
     }
 
-    fn new<H: HandleRequest>(mut builder: MetricBuilder) -> Self {
-        let buckets = BucketConfig::default();
+    fn new<H: HandleRequest>(mut builder: MetricBuilder, bucket_config: BucketConfig) -> Self {
         builder
             .namespace("fibers_http_server")
             .subsystem("handler")
@@ -296,7 +304,7 @@ impl HandlerMetrics {
             .label("path", H::PATH);
         HandlerMetrics {
             requests: Default::default(),
-            request_duration_seconds: buckets
+            request_duration_seconds: bucket_config
                 .prepare_histogram(
                     builder
                         .histogram("request_duration_seconds")

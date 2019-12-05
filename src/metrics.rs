@@ -11,7 +11,7 @@ use futures::{Async, Future, Poll};
 use httpcodec::{BodyDecoder, BodyEncoder};
 use prometrics;
 use prometrics::bucket::Bucket;
-use prometrics::metrics::{Counter, Histogram, MetricBuilder};
+use prometrics::metrics::{Counter, Histogram, HistogramBuilder, MetricBuilder};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
@@ -185,7 +185,16 @@ impl<H: HandleRequest> WithMetrics<H> {
 
     /// Makes a new `WithMetrics` instance with the given `MetricBuilder`.
     pub fn with_metrics(inner: H, metric_builder: MetricBuilder) -> Self {
-        let metrics = HandlerMetrics::new::<H>(metric_builder);
+        Self::with_metrics_and_bucket_config(inner, metric_builder, BucketConfig::default())
+    }
+
+    /// Makes a new `WithMetrics` instance with the given `MetricBuilder` and `BucketConfig`.
+    pub fn with_metrics_and_bucket_config(
+        inner: H,
+        metric_builder: MetricBuilder,
+        bucket_config: BucketConfig,
+    ) -> Self {
+        let metrics = HandlerMetrics::new::<H>(metric_builder, bucket_config);
         WithMetrics { inner, metrics }
     }
 
@@ -287,7 +296,7 @@ impl HandlerMetrics {
         self.request_duration_seconds.buckets()
     }
 
-    fn new<H: HandleRequest>(mut builder: MetricBuilder) -> Self {
+    fn new<H: HandleRequest>(mut builder: MetricBuilder, bucket_config: BucketConfig) -> Self {
         builder
             .namespace("fibers_http_server")
             .subsystem("handler")
@@ -295,21 +304,12 @@ impl HandlerMetrics {
             .label("path", H::PATH);
         HandlerMetrics {
             requests: Default::default(),
-            request_duration_seconds: builder
-                .histogram("request_duration_seconds")
-                .help("Requests processing duration")
-                .bucket(0.0001)
-                .bucket(0.0005)
-                .bucket(0.001)
-                .bucket(0.005)
-                .bucket(0.01)
-                .bucket(0.05)
-                .bucket(0.1)
-                .bucket(0.5)
-                .bucket(1.0)
-                .bucket(5.0)
-                .bucket(10.0)
-                .bucket(50.0)
+            request_duration_seconds: bucket_config
+                .prepare_histogram(
+                    builder
+                        .histogram("request_duration_seconds")
+                        .help("Requests processing duration"),
+                )
                 .finish()
                 .expect("Never fails"),
             builder: Arc::new(Mutex::new(builder)),
@@ -341,5 +341,63 @@ impl HandlerMetrics {
                 c.increment()
             }
         }
+    }
+}
+
+/// Bucket configuration. Holds an increasing sequence of upper_bound.
+pub struct BucketConfig(Vec<f64>);
+
+impl Default for BucketConfig {
+    fn default() -> Self {
+        let upper_bounds = vec![0.0001, 0.0005, 0.001, 0.005, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0];
+        Self::new(upper_bounds)
+    }
+}
+
+impl BucketConfig {
+    /// Creates a new BucketConfig using the given upper_bounds.
+    /// If upper_bounds is not strictly increasing, this function will panic.
+    pub fn new(upper_bounds: Vec<f64>) -> Self {
+        assert!(!upper_bounds.is_empty(), "upper_bounds cannot be empty");
+        for i in 0..upper_bounds.len() - 1 {
+            assert!(
+                upper_bounds[i] < upper_bounds[i + 1],
+                "upper_bounds is not strictly increasing: {:?}",
+                upper_bounds
+            );
+        }
+        Self(upper_bounds)
+    }
+    // Build a histogram using this BucketConfig.
+    fn prepare_histogram<'a>(
+        &self,
+        histogram_builder: &'a mut HistogramBuilder,
+    ) -> &'a mut HistogramBuilder {
+        for &upper_bound in &self.0 {
+            histogram_builder.bucket(upper_bound);
+        }
+        histogram_builder
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bucket_config_new_succeeds() {
+        let upper_bounds = vec![
+            0.001, 0.005, 0.01, 0.05, 0.1, 0.4, 0.8, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 50.0,
+        ];
+        let _ = BucketConfig::new(upper_bounds); // never panics
+    }
+
+    #[test]
+    #[should_panic]
+    fn bucket_config_new_correctly_panics() {
+        let upper_bounds = vec![
+            0.1, 0.5, 0.4, // not increasing!
+        ];
+        let _ = BucketConfig::new(upper_bounds);
     }
 }

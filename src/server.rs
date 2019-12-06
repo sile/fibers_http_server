@@ -140,7 +140,7 @@ impl ServerBuilder {
 /// HTTP server.
 ///
 /// This is created via `ServerBuilder`.
-#[must_use = "future do nothing unless polled"]
+#[must_use = "futures do nothing unless polled"]
 #[derive(Debug)]
 pub struct Server {
     logger: Logger,

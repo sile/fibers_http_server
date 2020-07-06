@@ -25,7 +25,7 @@ httpcodec = "0.2"
 prometrics = "0.1"
 slog = "2"
 trackable = "0.2"
-url = "1"
+url = "2"
 
 [dev-dependencies]
 fibers_global = "0.1"
